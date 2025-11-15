@@ -30,70 +30,6 @@
           }
       }
 
-      function formatOverviewRelative($timestamp): string
-      {
-          if ($timestamp === null || $timestamp === '') {
-              return '';
-          }
-
-          if (!is_numeric($timestamp)) {
-              return '';
-          }
-
-          $timestamp = (int) $timestamp;
-          $difference = time() - $timestamp;
-          if ($difference < 0) {
-              $difference = 0;
-          }
-
-          if ($difference < 45) {
-              return 'a few seconds ago';
-          }
-
-          if ($difference < 90) {
-              return 'a minute ago';
-          }
-
-          if ($difference < 45 * 60) {
-              $minutes = (int) floor($difference / 60);
-              return $minutes . ' minute' . ($minutes === 1 ? '' : 's') . ' ago';
-          }
-
-          if ($difference < 90 * 60) {
-              return 'an hour ago';
-          }
-
-          if ($difference < 22 * 3600) {
-              $hours = (int) floor($difference / 3600);
-              return $hours . ' hour' . ($hours === 1 ? '' : 's') . ' ago';
-          }
-
-          if ($difference < 36 * 3600) {
-              return 'a day ago';
-          }
-
-          if ($difference < 25 * 86400) {
-              $days = (int) floor($difference / 86400);
-              return $days . ' day' . ($days === 1 ? '' : 's') . ' ago';
-          }
-
-          if ($difference < 45 * 86400) {
-              return 'a month ago';
-          }
-
-          if ($difference < 345 * 86400) {
-              $months = (int) floor($difference / 2592000);
-              return $months . ' month' . ($months === 1 ? '' : 's') . ' ago';
-          }
-
-          if ($difference < 545 * 86400) {
-              return 'a year ago';
-          }
-
-          $years = (int) floor($difference / 31536000);
-          return $years . ' year' . ($years === 1 ? '' : 's') . ' ago';
-      }
-
       function overviewTimestampAttributes($timestamp, bool $relative = false, ?string $format = null): string
       {
           if ($timestamp === null || $timestamp === '') {
@@ -249,7 +185,7 @@
                 <div>
                     <div class="overview-content-summary-hr-indent">Receive Time:</div>
                     <div title="Timestamp of the latest packet" id="latest-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent"<?php echo overviewTimestampAttributes($station->latestPacketTimestamp, false, 'L LTSZ'); ?>>
-                        <?php echo htmlspecialchars(formatOverviewTimestamp($station->latestPacketTimestamp)); ?>
+                        <?php echo $station->latestPacketTimestamp; ?>
                     </div>
                 </div>
 
@@ -257,7 +193,7 @@
                 <div>
                     <div class="overview-content-summary-hr-indent">Age:</div>
                     <div title="Age of the latest packet" id="latest-timestamp-age" class="overview-content-summary-cell-time overview-content-summary-indent"<?php echo overviewTimestampAttributes($station->latestPacketTimestamp, true); ?>>
-                        <?php echo htmlspecialchars(formatOverviewRelative($station->latestPacketTimestamp)); ?>
+                        <?php echo $station->latestPacketTimestamp; ?>
                     </div>
                 </div>
 
@@ -314,7 +250,7 @@
                 <div>
                     <div class="overview-content-summary-hr">Latest Weather:</div>
                     <div id="weather-timestamp" class="overview-content-summary-cell-weather-time" title="Latest received weather"<?php echo overviewTimestampAttributes($station->latestWeatherPacketTimestamp, false, 'L LTSZ'); ?>>
-                        <?php echo htmlspecialchars(formatOverviewTimestamp($station->latestWeatherPacketTimestamp)); ?>
+                        <?php echo $station->latestWeatherPacketTimestamp; ?>
                     </div>
                 </div>
 
@@ -335,7 +271,7 @@
                 <div>
                     <div class="overview-content-summary-hr">Latest Telemetry:</div>
                     <div id="telemetry-timestamp" class="overview-content-summary-cell-telemetry-time" title="Latest received telemetry"<?php echo overviewTimestampAttributes($station->latestTelemetryPacketTimestamp, false, 'L LTSZ'); ?>>
-                        <?php echo htmlspecialchars(formatOverviewTimestamp($station->latestTelemetryPacketTimestamp)); ?>
+                        <?php echo $station->latestTelemetryPacketTimestamp; ?>
                     </div>
                 </div>
             <?php endif;?>
@@ -381,7 +317,7 @@
                         </div>
                     <?php else : ?>
                         <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time"<?php echo overviewTimestampAttributes($station->latestConfirmedPacketTimestamp, false, 'L LTSZ'); ?>>
-                            <?php echo htmlspecialchars(formatOverviewTimestamp($station->latestConfirmedPacketTimestamp)); ?>
+                            <?php echo $station->latestConfirmedPacketTimestamp; ?>
                         </div>
                     <?php endif; ?>
                 </div>
