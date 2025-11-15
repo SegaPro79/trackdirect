@@ -48,6 +48,7 @@ jQuery(document).ready(function ($) {
 
   (function initAprscFooterStatus() {
     var $footer = $('.site-footer');
+    var $usersOnlineValue = $footer.find('.js-users-online');
     if ($footer.length === 0) {
       return;
     }
@@ -120,24 +121,18 @@ jQuery(document).ready(function ($) {
       }
     }
 
-    function setUsersValue(value) {
-      if (value === null) {
-        $usersValue.text('N/A');
-        return;
-      }
+function setUsersValue(value) {
+  if (!$usersOnlineValue || $usersOnlineValue.length === 0) {
+    return;
+  }
 
-      var numericValue = Number(value);
-      if (!isNaN(numericValue) && isFinite(numericValue)) {
-        try {
-          $usersValue.text(numericValue.toLocaleString());
-          return;
-        } catch (error) {
-          // fall through to raw output
-        }
-      }
+  if (value === null || typeof value === 'undefined') {
+    $usersOnlineValue.text('N/A');
+  } else {
+    $usersOnlineValue.text(String(value));
+  }
+}
 
-      $usersValue.text(value);
-    }
 
     function setWebsocketConnection(isConnected) {
       var connected = !!isConnected;
@@ -244,40 +239,38 @@ jQuery(document).ready(function ($) {
       setWebsocketConnection(connected);
     }
 
-    function parseUsersValue(value) {
-      if (typeof value === 'undefined' || value === null || value === '') {
-        return null;
-      }
+function parseUsersValue(value) {
+  if (typeof value === 'undefined' || value === null || value === '') {
+    return null;
+  }
 
-      var parsed = parseInt(value, 10);
-      return Number.isNaN(parsed) ? null : parsed;
+  var parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function updateUsersDisplay(isConnected, rawUsersValue) {
+  if (isConnected === true) {
+    var parsedUsers = parseUsersValue(rawUsersValue);
+    if (parsedUsers !== null) {
+      setUsersValue(parsedUsers);
+      return;
     }
+  }
 
-    function updateUsersDisplay(isConnected, rawUsersValue) {
-      if (isConnected === true) {
-        var parsedUsers = parseUsersValue(rawUsersValue);
-        if (parsedUsers !== null) {
-          setUsersValue(parsedUsers);
-          return;
-        }
-      }
+  setUsersValue(null);
+}
 
-      setUsersValue(null);
-    }
+function applyStatus(status) {
+  if (typeof status !== 'object' || status === null) {
+    statusConnected = false;
+    setUsersValue(null);
+    return;
+  }
 
-    function applyStatus(status) {
-      if (typeof status !== 'object' || status === null) {
-        statusConnected = false;
-        setUsersValue(null);
-        return;
-      }
+  statusConnected = status.connected === true;
+  updateUsersDisplay(statusConnected, status.users_online);
+}
 
-      statusConnected = status.connected === true;
-      updateUsersDisplay(statusConnected, status.users_online);
-    }
-
-    statusConnected = toBool($footer.data('connected'));
-    updateUsersDisplay(statusConnected, $footer.data('usersOnline'));
 
     setWebsocketConnection(false);
 
