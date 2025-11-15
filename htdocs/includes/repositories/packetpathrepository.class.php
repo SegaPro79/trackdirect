@@ -120,68 +120,71 @@ class PacketPathRepository extends ModelRepository
 
         $limit = min($limit, 50);
 
-        $sql = 'select stats.station_id,
-                       stats.number_of_packets,
-                       stats.latest_timestamp,
-                       stats.longest_distance,
-                       latest_comment.comment latest_comment,
-                       latest_comment.timestamp latest_comment_timestamp,
-                       latest_status.comment latest_status,
-                       latest_status.timestamp latest_status_timestamp,
-                       latest_coords.latitude,
-                       latest_coords.longitude
-                from (
-                    select station_id,
-                           count(*) number_of_packets,
-                           max(timestamp) latest_timestamp,
-                           max(distance) longest_distance
-                    from packet_path
-                    where sending_station_id = ?
-                      and timestamp > ?
-                      and number = 0
-                      and station_id != sending_station_id
-                    group by station_id
-                ) stats
-                left join lateral (
-                    select p.comment,
-                           p.timestamp
-                    from packet p
-                    where p.station_id = stats.station_id
-                      and p.comment is not null
-                      and length(trim(p.comment)) > 0
-                    order by p.timestamp desc, p.id desc
-                    limit 1
-                ) latest_comment on true
-                left join lateral (
-                    select p.comment,
-                           p.timestamp
-                    from packet p
-                    where p.station_id = stats.station_id
-                      and p.packet_type_id = 10
-                      and p.comment is not null
-                      and length(trim(p.comment)) > 0
-                    order by p.timestamp desc, p.id desc
-                    limit 1
-                ) latest_status on true
-                left join lateral (
-                    select pp.latitude,
-                           pp.longitude
-                    from packet_path pp
-                    where pp.sending_station_id = ?
-                      and pp.station_id = stats.station_id
-                      and pp.timestamp > ?
-                      and pp.number = 0
-                    order by pp.timestamp desc, pp.id desc
-                    limit 1
-                ) latest_coords on true
-                order by stats.latest_timestamp desc
+        $sql = 'select station_id,
+                       count(*) number_of_packets,
+                       max(timestamp) latest_timestamp,
+                       max(distance) longest_distance
+                from packet_path
+                where sending_station_id = ?
+                  and timestamp > ?
+                  and number = 0
+                  and station_id != sending_station_id
+                group by station_id
+                order by max(timestamp) desc
                 limit ' . $limit;
 
-        $args = [$stationId, $minTimestamp, $stationId, $minTimestamp];
+        $args = [$stationId, $minTimestamp];
 
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepareAndExec($sql, $args);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $statsRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($statsRows) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($statsRows as $row) {
+            if (isset($row['station_id']) && isInt($row['station_id'])) {
+                $stationIds[] = (int)$row['station_id'];
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $packetRepository = PacketRepository::getInstance();
+        $latestComments = $packetRepository->getLatestCommentPacketsForStationIds($stationIds);
+        $latestStatuses = $packetRepository->getLatestStatusPacketsForStationIds($stationIds);
+        $latestCoordinates = $this->getLatestCoordinatesForSenderStation($stationId, $stationIds, $minTimestamp);
+
+        $rows = [];
+        foreach ($statsRows as $row) {
+            $stationIdValue = isset($row['station_id']) && isInt($row['station_id']) ? (int)$row['station_id'] : null;
+            if ($stationIdValue === null) {
+                continue;
+            }
+
+            $rowData = $row;
+
+            if (isset($latestComments[$stationIdValue])) {
+                $rowData['latest_comment'] = $latestComments[$stationIdValue]['comment'];
+                $rowData['latest_comment_timestamp'] = $latestComments[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestStatuses[$stationIdValue])) {
+                $rowData['latest_status'] = $latestStatuses[$stationIdValue]['comment'];
+                $rowData['latest_status_timestamp'] = $latestStatuses[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestCoordinates[$stationIdValue])) {
+                $rowData['latitude'] = $latestCoordinates[$stationIdValue]['latitude'];
+                $rowData['longitude'] = $latestCoordinates[$stationIdValue]['longitude'];
+            }
+
+            $rows[] = $rowData;
+        }
 
         return $this->formatCommunicationStats($rows);
     }
@@ -210,68 +213,71 @@ class PacketPathRepository extends ModelRepository
 
         $limit = min($limit, 50);
 
-        $sql = 'select stats.station_id,
-                       stats.number_of_packets,
-                       stats.latest_timestamp,
-                       stats.longest_distance,
-                       latest_comment.comment latest_comment,
-                       latest_comment.timestamp latest_comment_timestamp,
-                       latest_status.comment latest_status,
-                       latest_status.timestamp latest_status_timestamp,
-                       latest_coords.latitude,
-                       latest_coords.longitude
-                from (
-                    select sending_station_id station_id,
-                           count(*) number_of_packets,
-                           max(timestamp) latest_timestamp,
-                           max(distance) longest_distance
-                    from packet_path
-                    where station_id = ?
-                      and timestamp > ?
-                      and number = 0
-                      and station_id != sending_station_id
-                    group by sending_station_id
-                ) stats
-                left join lateral (
-                    select p.comment,
-                           p.timestamp
-                    from packet p
-                    where p.station_id = stats.station_id
-                      and p.comment is not null
-                      and length(trim(p.comment)) > 0
-                    order by p.timestamp desc, p.id desc
-                    limit 1
-                ) latest_comment on true
-                left join lateral (
-                    select p.comment,
-                           p.timestamp
-                    from packet p
-                    where p.station_id = stats.station_id
-                      and p.packet_type_id = 10
-                      and p.comment is not null
-                      and length(trim(p.comment)) > 0
-                    order by p.timestamp desc, p.id desc
-                    limit 1
-                ) latest_status on true
-                left join lateral (
-                    select pp.sending_latitude latitude,
-                           pp.sending_longitude longitude
-                    from packet_path pp
-                    where pp.station_id = ?
-                      and pp.sending_station_id = stats.station_id
-                      and pp.timestamp > ?
-                      and pp.number = 0
-                    order by pp.timestamp desc, pp.id desc
-                    limit 1
-                ) latest_coords on true
-                order by stats.latest_timestamp desc
+        $sql = 'select sending_station_id station_id,
+                       count(*) number_of_packets,
+                       max(timestamp) latest_timestamp,
+                       max(distance) longest_distance
+                from packet_path
+                where station_id = ?
+                  and timestamp > ?
+                  and number = 0
+                  and station_id != sending_station_id
+                group by sending_station_id
+                order by max(timestamp) desc
                 limit ' . $limit;
 
-        $args = [$stationId, $minTimestamp, $stationId, $minTimestamp];
+        $args = [$stationId, $minTimestamp];
 
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepareAndExec($sql, $args);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $statsRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($statsRows) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($statsRows as $row) {
+            if (isset($row['station_id']) && isInt($row['station_id'])) {
+                $stationIds[] = (int)$row['station_id'];
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $packetRepository = PacketRepository::getInstance();
+        $latestComments = $packetRepository->getLatestCommentPacketsForStationIds($stationIds);
+        $latestStatuses = $packetRepository->getLatestStatusPacketsForStationIds($stationIds);
+        $latestCoordinates = $this->getLatestCoordinatesForReceiverStation($stationId, $stationIds, $minTimestamp);
+
+        $rows = [];
+        foreach ($statsRows as $row) {
+            $stationIdValue = isset($row['station_id']) && isInt($row['station_id']) ? (int)$row['station_id'] : null;
+            if ($stationIdValue === null) {
+                continue;
+            }
+
+            $rowData = $row;
+
+            if (isset($latestComments[$stationIdValue])) {
+                $rowData['latest_comment'] = $latestComments[$stationIdValue]['comment'];
+                $rowData['latest_comment_timestamp'] = $latestComments[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestStatuses[$stationIdValue])) {
+                $rowData['latest_status'] = $latestStatuses[$stationIdValue]['comment'];
+                $rowData['latest_status_timestamp'] = $latestStatuses[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestCoordinates[$stationIdValue])) {
+                $rowData['latitude'] = $latestCoordinates[$stationIdValue]['latitude'];
+                $rowData['longitude'] = $latestCoordinates[$stationIdValue]['longitude'];
+            }
+
+            $rows[] = $rowData;
+        }
 
         return $this->formatCommunicationStats($rows);
     }
