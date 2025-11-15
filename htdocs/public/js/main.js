@@ -72,14 +72,15 @@ jQuery(document).ready(function ($) {
       refreshInterval = 10000;
     }
 
-    var ACTIVITY_DURATION = 4000;
+    var ACTIVITY_DURATION = 1500;
     var LAMP_STATES = ['off', 'connected', 'activity'];
     var activityTimers = { tx: null, rx: null };
     var state = {
-      connected: false,
+      websocketConnected: false,
       txActivity: false,
       rxActivity: false
     };
+    var statusConnected = false;
 
     function toInt(value) {
       if (value === null || typeof value === 'undefined' || value === '') {
@@ -146,10 +147,21 @@ jQuery(document).ready(function ($) {
       $usersValue.text(value);
     }
 
-    function setConnectionState(isConnected) {
-      state.connected = !!isConnected;
+    function setWebsocketConnection(isConnected) {
+      var connected = !!isConnected;
+      if (state.websocketConnected === connected && connected) {
+        if (!state.txActivity) {
+          setLampState($txIndicator, $txLamp, 'connected', 'TX');
+        }
+        if (!state.rxActivity) {
+          setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+        }
+        return;
+      }
 
-      if (!state.connected) {
+      state.websocketConnected = connected;
+
+      if (!state.websocketConnected) {
         clearActivityTimer('tx');
         clearActivityTimer('rx');
         state.txActivity = false;
@@ -168,7 +180,7 @@ jQuery(document).ready(function ($) {
     }
 
     function markTxActivity() {
-      if (!state.connected) {
+      if (!state.websocketConnected) {
         return;
       }
 
@@ -178,7 +190,7 @@ jQuery(document).ready(function ($) {
       activityTimers.tx = window.setTimeout(function () {
         activityTimers.tx = null;
         state.txActivity = false;
-        if (state.connected) {
+        if (state.websocketConnected) {
           setLampState($txIndicator, $txLamp, 'connected', 'TX');
         } else {
           setLampState($txIndicator, $txLamp, 'off', 'TX');
@@ -187,7 +199,7 @@ jQuery(document).ready(function ($) {
     }
 
     function markRxActivity() {
-      if (!state.connected) {
+      if (!state.websocketConnected) {
         return;
       }
 
@@ -197,7 +209,7 @@ jQuery(document).ready(function ($) {
       activityTimers.rx = window.setTimeout(function () {
         activityTimers.rx = null;
         state.rxActivity = false;
-        if (state.connected) {
+        if (state.websocketConnected) {
           setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
         } else {
           setLampState($rxIndicator, $rxLamp, 'off', 'RX');
@@ -205,52 +217,67 @@ jQuery(document).ready(function ($) {
       }, ACTIVITY_DURATION);
     }
 
+    function updateWebsocketConnection(websocket) {
+      if (!websocket) {
+        setWebsocketConnection(false);
+        return;
+      }
+
+      var connected = false;
+      if (typeof websocket.getState === 'function') {
+        var stateValue = websocket.getState();
+        if (websocket.State && typeof websocket.State === 'object') {
+          var states = websocket.State;
+          var connectedStates = [
+            states.CONNECTED,
+            states.LISTENING_APRSIS,
+            states.LOADING,
+            states.LOADING_DONE,
+            states.CONNECTING_APRSIS,
+            states.IDLE,
+          ];
+
+          if (connectedStates.indexOf(stateValue) !== -1) {
+            connected = true;
+          }
+        } else if (stateValue === 1) {
+          connected = true;
+        }
+      }
+
+      if (!connected && websocket._instance && typeof websocket._instance.readyState !== 'undefined') {
+        connected = websocket._instance.readyState === 1;
+      }
+
+      setWebsocketConnection(connected);
+    }
+
     function applyStatus(status) {
       if (typeof status !== 'object' || status === null) {
-        setConnectionState(false);
+        statusConnected = false;
         setUsersValue(null);
         return;
       }
 
-      var connected = toBool(status.connected);
-      setConnectionState(connected);
+      statusConnected = toBool(status.connected);
 
-      if (!connected) {
+      if (!statusConnected) {
         setUsersValue(null);
         return;
       }
 
       var users = toInt(status.users_online);
       setUsersValue(users);
-
-      if (toBool(status.tx_active)) {
-        markTxActivity();
-      } else if (!state.txActivity) {
-        setLampState($txIndicator, $txLamp, 'connected', 'TX');
-      }
-
-      if (toBool(status.rx_active)) {
-        markRxActivity();
-      } else if (!state.rxActivity) {
-        setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
-      }
     }
 
-    var initialConnected = toBool($footer.data('connected'));
-    setConnectionState(initialConnected);
-    if (initialConnected) {
+    statusConnected = toBool($footer.data('connected'));
+    if (statusConnected) {
       setUsersValue(toInt($footer.data('usersOnline')));
     } else {
       setUsersValue(null);
     }
 
-    if (initialConnected && toBool($footer.data('txActivity'))) {
-      markTxActivity();
-    }
-
-    if (initialConnected && toBool($footer.data('rxActivity'))) {
-      markRxActivity();
-    }
+    setWebsocketConnection(false);
 
     $(document).on('trackdirect:rx-activity', markRxActivity);
     $(document).on('trackdirect:tx-activity', markTxActivity);
@@ -264,9 +291,28 @@ jQuery(document).ready(function ($) {
 
         if (trackdirect._websocket && typeof trackdirect._websocket.addListener === 'function') {
           websocketHooked = true;
-          trackdirect._websocket.addListener('aprs-packet', function () {
+          var websocket = trackdirect._websocket;
+
+          websocket.addListener('aprs-packet', function () {
             markRxActivity();
           });
+
+          if (typeof websocket.addListener === 'function') {
+            websocket.addListener('state-change', function () {
+              updateWebsocketConnection(websocket);
+            });
+          }
+
+          updateWebsocketConnection(websocket);
+
+          if (!websocket._aprsFooterSendWrapped && typeof websocket.send === 'function') {
+            websocket._aprsFooterSendWrapped = true;
+            var originalSend = websocket.send.bind(websocket);
+            websocket.send = function (data) {
+              markTxActivity();
+              return originalSend(data);
+            };
+          }
         }
       });
 
@@ -290,7 +336,7 @@ jQuery(document).ready(function ($) {
           applyStatus(data);
         })
         .fail(function () {
-          setConnectionState(false);
+          statusConnected = false;
           setUsersValue(null);
         });
     }
