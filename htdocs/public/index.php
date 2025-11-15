@@ -23,7 +23,7 @@ $resolveLampState = static function (bool $connected, bool $hasActivity): string
 };
 
 $txLampClass = $resolveLampState($aprscConnected, $txActive);
-$rxLampClass = $resolveLampState($aprscConnected, false);
+$rxLampClass = $resolveLampState($aprscConnected, $rxActive);
 $lampStateFromClass = static function (string $class): string {
     if (strpos($class, 'lamp-') === 0) {
         return substr($class, 5);
@@ -206,7 +206,7 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
                        trackdirect.addListener("trackdirect-init-done", function () {
                          trackdirect._websocket.addListener("server-timestamp-response", function (data) {
                            var formattedTime = moment(new Date(1000 * data.timestamp)).format('LTS');
-                           $('#svrclock, #header-svrclock').text(formattedTime);
+                           $('#header-svrclock').text(formattedTime);
                            liveData.init();
                          });
                         });
@@ -412,8 +412,6 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
                   <input type="submit" value="Go" />
               </form>
             </div>
-
-            <a class="tdlink" id="svrclock">00:00:00</a>
 
             <a href="javascript:void(0);" class="icon" onclick="toggleTopNav()">&#9776;</a>
 

@@ -225,9 +225,13 @@ jQuery(document).ready(function ($) {
 
       if (toBool(status.tx_active)) {
         markTxActivity();
+      } else if (!state.txActivity) {
+        setLampState($txIndicator, $txLamp, 'connected', 'TX');
       }
 
-      if (!state.rxActivity) {
+      if (toBool(status.rx_active)) {
+        markRxActivity();
+      } else if (!state.rxActivity) {
         setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
       }
     }
@@ -242,6 +246,10 @@ jQuery(document).ready(function ($) {
 
     if (initialConnected && toBool($footer.data('txActivity'))) {
       markTxActivity();
+    }
+
+    if (initialConnected && toBool($footer.data('rxActivity'))) {
+      markRxActivity();
     }
 
     $(document).on('trackdirect:rx-activity', markRxActivity);
@@ -261,6 +269,19 @@ jQuery(document).ready(function ($) {
           });
         }
       });
+
+      trackdirect.addListener('map-created', function () {
+        if (!trackdirect._map || typeof trackdirect._map.addTdListener !== 'function') {
+          return;
+        }
+
+        var handleClientActivity = function () {
+          markTxActivity();
+        };
+
+        trackdirect._map.addTdListener('moving', handleClientActivity);
+        trackdirect._map.addTdListener('change', handleClientActivity);
+      }, true);
     }
 
     function pollAprscStatus() {

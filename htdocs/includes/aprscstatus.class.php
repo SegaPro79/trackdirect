@@ -4,6 +4,9 @@ class AprscStatus
 {
     private const STATUS_URL = 'https://aprsc.aprsdirect.de/';
     private const CACHE_TTL = 10; // seconds
+    private const REQUEST_HEADERS = "User-Agent: APRSdirect Layout Updater\r\n"
+        . "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n"
+        . "Accept-Language: en-US,en;q=0.9\r\n";
 
     /**
      * Fetch and summarize APRSC status metrics.
@@ -14,7 +17,8 @@ class AprscStatus
      *     pkts_rx: ?int,
      *     pkts_rtx: ?int,
      *     tx_active: bool,
-     *     rx_active: bool
+     *     rx_active: bool,
+     *     connected: bool
      * }
      */
     public static function getSummary(): array
@@ -49,12 +53,23 @@ class AprscStatus
             'http' => [
                 'timeout' => 3,
                 'ignore_errors' => true,
-                'header' => "User-Agent: APRSdirect Layout Updater\r\n",
+                'header' => self::REQUEST_HEADERS,
             ],
         ]);
 
+        $httpStatusOk = false;
         $html = @file_get_contents(self::STATUS_URL, false, $context);
         if ($html !== false && $html !== '') {
+            global $http_response_header;
+            $headers = [];
+            if (isset($http_response_header) && is_array($http_response_header)) {
+                $headers = $http_response_header;
+            }
+
+            $httpStatusOk = self::isHttpStatusSuccessful($headers);
+        }
+
+        if ($httpStatusOk) {
             $parsed = self::parseHtml($html);
             $summary = array_merge($summary, array_intersect_key($parsed, $summary));
             $summary['connected'] = true;
@@ -81,7 +96,8 @@ class AprscStatus
      *     pkts_rx: ?int,
      *     pkts_rtx: ?int,
      *     tx_active: bool,
-     *     rx_active: bool
+     *     rx_active: bool,
+     *     connected: bool
      * }
      */
     private static function normalizeSummary(array $data): array
@@ -95,6 +111,18 @@ class AprscStatus
             'tx_active' => !empty($data['tx_active']),
             'rx_active' => !empty($data['rx_active']),
         ];
+    }
+
+    /**
+     * @param array<int, string> $headers
+     */
+    private static function isHttpStatusSuccessful(array $headers): bool
+    {
+        if (!isset($headers[0])) {
+            return false;
+        }
+
+        return (bool) preg_match('/^HTTP\/\d+\.\d+\s+2\d\d\b/', $headers[0]);
     }
 
     private static function getCacheFilePath(): string
@@ -180,7 +208,10 @@ class AprscStatus
         libxml_clear_errors();
 
         if (!isset($result['users_online'])) {
-            $result['users_online'] = self::extractNumberFromHtml($html, ['users online', 'listeners', 'clients']);
+            $result['users_online'] = self::extractClientsCountFromHtml($html);
+            if ($result['users_online'] === null) {
+                $result['users_online'] = self::extractNumberFromHtml($html, ['users online', 'listeners', 'clients']);
+            }
         }
         if (!isset($result['pkts_tx'])) {
             $result['pkts_tx'] = self::extractNumberFromHtml($html, ['tx', 'tx ok', 'transmit']);
@@ -193,6 +224,33 @@ class AprscStatus
         }
 
         return $result;
+    }
+
+    private static function extractClientsCountFromHtml(string $html): ?int
+    {
+        $flags = ENT_QUOTES;
+        if (defined('ENT_HTML5')) {
+            $flags |= ENT_HTML5;
+        }
+
+        $decoded = html_entity_decode($html, $flags, 'UTF-8');
+
+        $patterns = [
+            '/clients[^<]*<[^>]*>([^<]+)<\/[^>]+>/i',
+            '/clients[^\d]*([\d][\d\s,.]*)/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $decoded, $matches)) {
+                $value = $matches[1] ?? '';
+                $number = self::extractNumber($value);
+                if ($number !== null) {
+                    return $number;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static function matchesAny(string $haystack, array $needles): bool
