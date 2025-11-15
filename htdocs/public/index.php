@@ -428,6 +428,8 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
             <div class="site-footer__left">
                 <span class="site-footer__label">Users Online:</span>
                 <span class="site-footer__value" id="footer-users-online"><?php echo $usersOnlineDisplay; ?></span>
+
+
             </div>
             <div class="site-footer__right">
                 <div class="site-footer__traffic" role="group" aria-label="APRSC traffic state">
