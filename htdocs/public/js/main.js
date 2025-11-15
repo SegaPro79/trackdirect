@@ -82,14 +82,6 @@ jQuery(document).ready(function ($) {
     };
     var statusConnected = false;
 
-    function toInt(value) {
-      if (value === null || typeof value === 'undefined' || value === '') {
-        return null;
-      }
-      var parsed = parseInt(value, 10);
-      return isNaN(parsed) ? null : parsed;
-    }
-
     function toBool(value) {
       if (typeof value === 'boolean') {
         return value;
@@ -252,6 +244,27 @@ jQuery(document).ready(function ($) {
       setWebsocketConnection(connected);
     }
 
+    function parseUsersValue(value) {
+      if (typeof value === 'undefined' || value === null || value === '') {
+        return null;
+      }
+
+      var parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+
+    function updateUsersDisplay(isConnected, rawUsersValue) {
+      if (isConnected === true) {
+        var parsedUsers = parseUsersValue(rawUsersValue);
+        if (parsedUsers !== null) {
+          setUsersValue(parsedUsers);
+          return;
+        }
+      }
+
+      setUsersValue(null);
+    }
+
     function applyStatus(status) {
       if (typeof status !== 'object' || status === null) {
         statusConnected = false;
@@ -259,23 +272,12 @@ jQuery(document).ready(function ($) {
         return;
       }
 
-      statusConnected = toBool(status.connected);
-
-      if (!statusConnected) {
-        setUsersValue(null);
-        return;
-      }
-
-      var users = toInt(status.users_online);
-      setUsersValue(users);
+      statusConnected = status.connected === true;
+      updateUsersDisplay(statusConnected, status.users_online);
     }
 
     statusConnected = toBool($footer.data('connected'));
-    if (statusConnected) {
-      setUsersValue(toInt($footer.data('usersOnline')));
-    } else {
-      setUsersValue(null);
-    }
+    updateUsersDisplay(statusConnected, $footer.data('usersOnline'));
 
     setWebsocketConnection(false);
 
