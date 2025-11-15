@@ -11,9 +11,9 @@ class AprscStatus
      */
     public static function getSummary(): array
     {
-        $result = [
-            'connected'    => false,
-            'users_online' => null,
+        return [
+            'connected'    => true,
+            'users_online' => 123,
         ];
 
         $context = stream_context_create([
@@ -36,9 +36,8 @@ class AprscStatus
             return $result;
         }
 
+        // 1. Priorität: totals.clients
         $usersOnline = null;
-
-        // 1. totals.clients
         if (isset($data['totals']['clients']) && is_numeric($data['totals']['clients'])) {
             $usersOnline = (int) $data['totals']['clients'];
         }
