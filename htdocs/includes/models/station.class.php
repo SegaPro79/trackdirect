@@ -255,48 +255,6 @@ class Station extends Model
     }
 
     /**
-     * Get latest packet with comment for this station
-     *
-     * @return Packet
-     */
-    public function getLatestPacketWithComment()
-    {
-        static $cache = array();
-        $key = $this->id ?? 0;
-
-        if (!isset($cache[$key])) {
-            if ($this->isExistingObject()) {
-                $cache[$key] = PacketRepository::getInstance()->getLatestPacketWithCommentByStationId($this->id);
-            } else {
-                $cache[$key] = new Packet(0);
-            }
-        }
-
-        return $cache[$key];
-    }
-
-    /**
-     * Get latest status packet for this station
-     *
-     * @return Packet
-     */
-    public function getLatestStatusPacket()
-    {
-        static $cache = array();
-        $key = $this->id ?? 0;
-
-        if (!isset($cache[$key])) {
-            if ($this->isExistingObject()) {
-                $cache[$key] = PacketRepository::getInstance()->getLatestStatusPacketByStationId($this->id);
-            } else {
-                $cache[$key] = new Packet(0);
-            }
-        }
-
-        return $cache[$key];
-    }
-
-    /**
      * Get packet frequency in number of seconds for the latest 10 packets
      *
      * @param  string $date

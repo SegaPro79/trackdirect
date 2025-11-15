@@ -557,10 +557,16 @@
                                                     $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
                                                 }
                                             }
-                                            $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
-                                            $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
-                                            $commentPacket = $otherStation->getLatestPacketWithComment();
-                                            $statusPacket = $otherStation->getLatestStatusPacket();
+                                            $positionLatitude = $stats['latest_latitude'] ?? null;
+                                            $positionLongitude = $stats['latest_longitude'] ?? null;
+                                            if ($positionLatitude === null || $positionLongitude === null) {
+                                                $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                                $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            }
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = $stats['latest_comment_timestamp'] ?? '';
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = $stats['latest_status_timestamp'] ?? '';
                                         ?>
                                         <tr>
                                             <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
@@ -576,17 +582,21 @@
                                                 <?php endif; ?>
                                             </td>
                                             <td class="overview-stations-text">
-                                                <?php if ($commentPacket->isExistingObject()) : ?>
-                                                    <span class="nts"><?php echo $commentPacket->timestamp; ?></span>
-                                                    <?php echo nl2br(htmlentities($commentPacket->comment)); ?>
+                                                <?php if ($latestComment !== '' && $latestComment !== null) : ?>
+                                                    <?php if ($latestCommentTimestamp !== '' && $latestCommentTimestamp !== null) : ?>
+                                                        <span class="nts"><?php echo $latestCommentTimestamp; ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestComment)); ?>
                                                 <?php else : ?>
                                                     &nbsp;
                                                 <?php endif; ?>
                                             </td>
                                             <td class="overview-stations-text">
-                                                <?php if ($statusPacket->isExistingObject()) : ?>
-                                                    <span class="nts"><?php echo $statusPacket->timestamp; ?></span>
-                                                    <?php echo nl2br(htmlentities($statusPacket->comment)); ?>
+                                                <?php if ($latestStatus !== '' && $latestStatus !== null) : ?>
+                                                    <?php if ($latestStatusTimestamp !== '' && $latestStatusTimestamp !== null) : ?>
+                                                        <span class="nts"><?php echo $latestStatusTimestamp; ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestStatus)); ?>
                                                 <?php else : ?>
                                                     &nbsp;
                                                 <?php endif; ?>
@@ -633,10 +643,16 @@
                                                     $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
                                                 }
                                             }
-                                            $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
-                                            $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
-                                            $commentPacket = $otherStation->getLatestPacketWithComment();
-                                            $statusPacket = $otherStation->getLatestStatusPacket();
+                                            $positionLatitude = $stats['latest_latitude'] ?? null;
+                                            $positionLongitude = $stats['latest_longitude'] ?? null;
+                                            if ($positionLatitude === null || $positionLongitude === null) {
+                                                $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                                $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            }
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = $stats['latest_comment_timestamp'] ?? '';
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = $stats['latest_status_timestamp'] ?? '';
                                         ?>
                                         <tr>
                                             <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
@@ -652,17 +668,21 @@
                                                 <?php endif; ?>
                                             </td>
                                             <td class="overview-stations-text">
-                                                <?php if ($commentPacket->isExistingObject()) : ?>
-                                                    <span class="nts"><?php echo $commentPacket->timestamp; ?></span>
-                                                    <?php echo nl2br(htmlentities($commentPacket->comment)); ?>
+                                                <?php if ($latestComment !== '' && $latestComment !== null) : ?>
+                                                    <?php if ($latestCommentTimestamp !== '' && $latestCommentTimestamp !== null) : ?>
+                                                        <span class="nts"><?php echo $latestCommentTimestamp; ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestComment)); ?>
                                                 <?php else : ?>
                                                     &nbsp;
                                                 <?php endif; ?>
                                             </td>
                                             <td class="overview-stations-text">
-                                                <?php if ($statusPacket->isExistingObject()) : ?>
-                                                    <span class="nts"><?php echo $statusPacket->timestamp; ?></span>
-                                                    <?php echo nl2br(htmlentities($statusPacket->comment)); ?>
+                                                <?php if ($latestStatus !== '' && $latestStatus !== null) : ?>
+                                                    <?php if ($latestStatusTimestamp !== '' && $latestStatusTimestamp !== null) : ?>
+                                                        <span class="nts"><?php echo $latestStatusTimestamp; ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestStatus)); ?>
                                                 <?php else : ?>
                                                     &nbsp;
                                                 <?php endif; ?>
