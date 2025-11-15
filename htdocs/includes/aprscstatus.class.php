@@ -2,25 +2,10 @@
 
 class AprscStatus
 {
-    /**
-     * Candidate endpoints. The helper will iterate until it finds a response it can parse.
-     *
-     * @var array<int, string>
-     */
-    private const STATUS_URLS = [
-        'https://aprsc.aprsdirect.de/json',
-        'https://aprsc.aprsdirect.de/status.json',
-        'https://aprsc.aprsdirect.de/status_json',
-        'https://aprsc.aprsdirect.de/status-json',
-        'https://aprsc.aprsdirect.de/status?format=json',
-        'https://aprsc.aprsdirect.de/?format=json',
-        'https://aprsc.aprsdirect.de/',
-    ];
-
+    private const STATUS_URL = 'http://127.0.0.1:14501/status.json';
     private const CACHE_TTL = 10; // seconds
     private const REQUEST_HEADERS = "User-Agent: APRSdirect Layout Updater\r\n"
-        . "Accept: application/json, text/plain;q=0.9, */*;q=0.8\r\n"
-        . "Accept-Language: en-US,en;q=0.9\r\n"
+        . "Accept: application/json\r\n"
         . "Cache-Control: no-cache\r\n"
         . "Pragma: no-cache\r\n";
 
@@ -45,7 +30,11 @@ class AprscStatus
 
         if (is_readable($cacheFile)) {
             $cachedPayload = json_decode((string) file_get_contents($cacheFile), true);
-            if (is_array($cachedPayload) && isset($cachedPayload['timestamp']) && ($now - (int) $cachedPayload['timestamp']) < self::CACHE_TTL) {
+            if (
+                is_array($cachedPayload)
+                && isset($cachedPayload['timestamp'])
+                && ($now - (int) $cachedPayload['timestamp']) < self::CACHE_TTL
+            ) {
                 return self::normalizeSummary($cachedPayload['data'] ?? []);
             }
         }
@@ -66,30 +55,13 @@ class AprscStatus
         }
 
         $previousSummary = self::normalizeSummary(array_merge($defaults, $previousData));
-
         $summary = $defaults;
 
-        foreach (self::STATUS_URLS as $endpoint) {
-            $response = self::fetchStatus($endpoint);
-            if ($response === null || !$response['ok']) {
-                continue;
-            }
-
-            $parsed = self::parseResponse($response['body'], $response['headers']);
+        $response = self::fetchStatus(self::STATUS_URL);
+        if ($response !== null && $response['ok']) {
+            $parsed = self::parseJson($response['body']);
             if (!empty($parsed)) {
-                foreach (['users_online', 'pkts_tx', 'pkts_rx', 'pkts_rtx'] as $metricKey) {
-                    if (array_key_exists($metricKey, $parsed) && $parsed[$metricKey] !== null) {
-                        $summary[$metricKey] = $parsed[$metricKey];
-                    }
-                }
-
-                if (array_key_exists('connected', $parsed)) {
-                    $summary['connected'] = $parsed['connected'];
-                }
-
-                if ($summary['users_online'] !== null && $summary['pkts_tx'] !== null && $summary['pkts_rx'] !== null) {
-                    break;
-                }
+                $summary = array_merge($summary, $parsed);
             }
         }
 
@@ -97,10 +69,6 @@ class AprscStatus
         $summary['pkts_tx'] = self::castValue($summary['pkts_tx'] ?? null);
         $summary['pkts_rx'] = self::castValue($summary['pkts_rx'] ?? null);
         $summary['pkts_rtx'] = self::castValue($summary['pkts_rtx'] ?? null);
-
-        if (array_key_exists('connected', $summary)) {
-            $summary['connected'] = !empty($summary['connected']);
-        }
 
         if (!$summary['connected'] && self::hasNumericMetrics($summary)) {
             $summary['connected'] = true;
@@ -146,18 +114,6 @@ class AprscStatus
             'tx_active' => !empty($data['tx_active']),
             'rx_active' => !empty($data['rx_active']),
         ];
-    }
-
-    /**
-     * @param array<int, string> $headers
-     */
-    private static function isHttpStatusSuccessful(array $headers): bool
-    {
-        if (!isset($headers[0])) {
-            return false;
-        }
-
-        return (bool) preg_match('/^HTTP\/\d+\.\d+\s+2\d\d\b/', $headers[0]);
     }
 
     private static function getCacheFilePath(): string
@@ -206,67 +162,39 @@ class AprscStatus
 
     /**
      * @param array<int, string> $headers
-     * @return array<string, int|null|bool>
      */
-    private static function parseResponse(string $payload, array $headers): array
+    private static function isHttpStatusSuccessful(array $headers): bool
     {
-        if ($payload === '') {
-            return [];
+        if (!isset($headers[0])) {
+            return false;
         }
 
-        $contentType = self::detectContentType($headers);
-        if (self::looksLikeJson($payload, $contentType)) {
-            $parsed = self::parseJsonPayload($payload);
-            if (!empty($parsed)) {
-                return $parsed;
-            }
-        }
-
-        return self::parseHtml($payload);
+        return (bool) preg_match('/^HTTP\/\d+\.\d+\s+2\d\d\b/', $headers[0]);
     }
 
     /**
      * @return array<string, int|null|bool>
      */
-    private static function parseJsonPayload(string $payload): array
+    private static function parseJson(string $payload): array
     {
         $decoded = json_decode($payload, true);
         if (!is_array($decoded)) {
             return [];
         }
 
-        return self::extractMetricsFromJson($decoded);
-    }
+        $usersOnline = self::extractUsersOnline($decoded);
+        $pktsTx = self::extractPacketTotal($decoded, ['tx', 'out', 'transmit']);
+        $pktsRx = self::extractPacketTotal($decoded, ['rx', 'in', 'receive']);
+        $pktsRtx = self::extractPacketTotal($decoded, ['rtx', 'retry']);
 
-    /**
-     * @param array<string, mixed> $data
-     * @return array<string, int|null|bool>
-     */
-    private static function extractMetricsFromJson(array $data): array
-    {
-        $result = [];
+        $result = [
+            'users_online' => $usersOnline,
+            'pkts_tx' => $pktsTx,
+            'pkts_rx' => $pktsRx,
+            'pkts_rtx' => $pktsRtx,
+        ];
 
-        $usersOnline = self::extractClientsFromJson($data);
-        if ($usersOnline !== null) {
-            $result['users_online'] = $usersOnline;
-        }
-
-        $pktsRx = self::extractTrafficFromJson($data, ['rx', 'receive', 'received', 'inbound', 'in', 'input']);
-        if ($pktsRx !== null) {
-            $result['pkts_rx'] = $pktsRx;
-        }
-
-        $pktsTx = self::extractTrafficFromJson($data, ['tx', 'transmit', 'transmitted', 'outbound', 'out', 'sent', 'output']);
-        if ($pktsTx !== null) {
-            $result['pkts_tx'] = $pktsTx;
-        }
-
-        $pktsRtx = self::extractTrafficFromJson($data, ['rtx', 'retry', 'retransmit', 'resend', 'retries']);
-        if ($pktsRtx !== null) {
-            $result['pkts_rtx'] = $pktsRtx;
-        }
-
-        if (self::hasNumericMetrics($result)) {
+        if ($usersOnline !== null || $pktsTx !== null || $pktsRx !== null || $pktsRtx !== null) {
             $result['connected'] = true;
         }
 
@@ -276,15 +204,13 @@ class AprscStatus
     /**
      * @param array<string, mixed> $data
      */
-    private static function extractClientsFromJson(array $data): ?int
+    private static function extractUsersOnline(array $data): ?int
     {
         $paths = [
             ['clients', 'total'],
             ['clients', 'connected'],
-            ['clients', 'current'],
             ['status', 'clients', 'total'],
-            ['status', 'listeners', 'total'],
-            ['global', 'clients', 'total'],
+            ['listeners', 'total'],
         ];
 
         foreach ($paths as $path) {
@@ -295,184 +221,91 @@ class AprscStatus
             }
         }
 
-        return self::extractNumericByKeyPatterns($data, ['clients', 'client', 'listeners', 'users'], ['total', 'count', 'value', 'connected', 'current']);
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @param array<int, string> $primaryKeys
-     */
-    private static function extractTrafficFromJson(array $data, array $primaryKeys): ?int
-    {
-        $sections = [];
-        $containers = [$data];
-
-        foreach (['traffic', 'totals', 'counts', 'statistics', 'stats'] as $containerKey) {
-            if (isset($data[$containerKey]) && is_array($data[$containerKey])) {
-                $containers[] = $data[$containerKey];
-            }
-        }
-
-        foreach ($containers as $container) {
-            if (!is_array($container)) {
-                continue;
-            }
-
-            foreach ($primaryKeys as $key) {
-                if (isset($container[$key])) {
-                    $sections[] = $container[$key];
-                }
-            }
-
-            foreach (['counts', 'totals', 'packets', 'frames'] as $subKey) {
-                if (isset($container[$subKey]) && is_array($container[$subKey])) {
-                    foreach ($primaryKeys as $key) {
-                        if (isset($container[$subKey][$key])) {
-                            $sections[] = $container[$subKey][$key];
-                        }
-                    }
-                }
-            }
-        }
-
-        foreach ($sections as $section) {
-            $numeric = self::extractNumericCandidate($section, ['total', 'packets', 'frames', 'count', 'value']);
-            if ($numeric !== null) {
-                return $numeric;
-            }
-        }
-
-        return self::extractNumericByKeyPatterns($data, $primaryKeys, ['total', 'packets', 'frames', 'count', 'value']);
-    }
-
-    /**
-     * @return array<string, int|null>
-     */
-    private static function parseHtml(string $html): array
-    {
-        $result = [];
-
-        libxml_use_internal_errors(true);
-        $dom = new DOMDocument();
-        if ($dom->loadHTML($html)) {
-            $xpath = new DOMXPath($dom);
-            foreach ($xpath->query('//tr') as $row) {
-                $cells = [];
-                foreach ($row->childNodes as $cell) {
-                    if ($cell instanceof DOMElement && in_array(strtolower($cell->tagName), ['td', 'th'], true)) {
-                        $cells[] = trim(preg_replace('/\s+/', ' ', $cell->textContent));
-                    }
-                }
-
-                $cellsCount = count($cells);
-                if ($cellsCount === 0) {
+        if (isset($data['clients']) && is_array($data['clients'])) {
+            $sum = 0;
+            $found = false;
+            foreach ($data['clients'] as $clientData) {
+                if (!is_array($clientData)) {
                     continue;
                 }
 
-                $label = strtolower($cells[0]);
-
-                if (!array_key_exists('users_online', $result) || $result['users_online'] === null) {
-                    if (self::matchesAny($label, ['users online', 'listeners', 'clients'])) {
-                        $value = self::extractFirstNumber(array_slice($cells, 1));
-                        if ($value !== null) {
-                            $result['users_online'] = $value;
-                        }
+                foreach (['connected', 'inuse', 'current', 'count', 'clients', 'value', 'total'] as $key) {
+                    if (!array_key_exists($key, $clientData)) {
                         continue;
                     }
-                }
 
-                $isTotalsRow = self::matchesAny($label, ['packets', 'frames', 'traffic']);
-
-                if ($cellsCount >= 3 && $isTotalsRow) {
-                    if (!isset($result['pkts_rx'])) {
-                        $result['pkts_rx'] = self::extractNumber($cells[1]);
-                    }
-                    if (!isset($result['pkts_tx'])) {
-                        $result['pkts_tx'] = self::extractNumber($cells[2]);
-                    }
-                    if ($cellsCount >= 4 && !isset($result['pkts_rtx'])) {
-                        $result['pkts_rtx'] = self::extractNumber($cells[3]);
-                    }
-                    continue;
-                }
-
-                if ($cellsCount >= 2) {
-                    if (!isset($result['pkts_tx']) && self::matchesAny($label, ['tx', 'transmit'])) {
-                        $result['pkts_tx'] = self::extractNumber($cells[1]);
-                        continue;
-                    }
-                    if (!isset($result['pkts_rx']) && self::matchesAny($label, ['rx', 'receive'])) {
-                        $result['pkts_rx'] = self::extractNumber($cells[1]);
-                        continue;
-                    }
-                    if (!isset($result['pkts_rtx']) && self::matchesAny($label, ['rtx', 'retry'])) {
-                        $result['pkts_rtx'] = self::extractNumber($cells[1]);
-                        continue;
+                    $numeric = self::castValue($clientData[$key]);
+                    if ($numeric !== null) {
+                        $sum += $numeric;
+                        $found = true;
+                        break;
                     }
                 }
             }
-        }
-        libxml_clear_errors();
 
-        if (!isset($result['users_online'])) {
-            $result['users_online'] = self::extractClientsCountFromHtml($html);
-            if ($result['users_online'] === null) {
-                $result['users_online'] = self::extractNumberFromHtml($html, ['users online', 'listeners', 'clients']);
-            }
-        }
-        if (!isset($result['pkts_tx'])) {
-            $result['pkts_tx'] = self::extractNumberFromHtml($html, ['tx', 'tx ok', 'transmit']);
-        }
-        if (!isset($result['pkts_rx'])) {
-            $result['pkts_rx'] = self::extractNumberFromHtml($html, ['rx', 'receive']);
-        }
-        if (!isset($result['pkts_rtx'])) {
-            $result['pkts_rtx'] = self::extractNumberFromHtml($html, ['rtx', 'retry']);
-        }
-
-        return $result;
-    }
-
-    private static function extractClientsCountFromHtml(string $html): ?int
-    {
-        $flags = ENT_QUOTES;
-        if (defined('ENT_HTML5')) {
-            $flags |= ENT_HTML5;
-        }
-
-        $decoded = html_entity_decode($html, $flags, 'UTF-8');
-
-        $patterns = [
-            '/clients[^<]*<[^>]*>([^<]+)<\/[^>]+>/i',
-            '/clients[^\d]*([\d][\d\s,.]*)/i',
-        ];
-
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $decoded, $matches)) {
-                $value = $matches[1] ?? '';
-                $number = self::extractNumber($value);
-                if ($number !== null) {
-                    return $number;
-                }
+            if ($found) {
+                return $sum;
             }
         }
 
         return null;
     }
 
-    private static function matchesAny(string $haystack, array $needles): bool
+    /**
+     * @param array<string, mixed> $data
+     * @param array<int, string> $directionKeys
+     */
+    private static function extractPacketTotal(array $data, array $directionKeys): ?int
     {
-        foreach ($needles as $needle) {
-            $needleLower = strtolower($needle);
-            if (strlen($needleLower) <= 2) {
-                $pattern = sprintf('/(^|[^a-z0-9])%s($|[^a-z0-9])/i', preg_quote($needleLower, '/'));
-                if (preg_match($pattern, $haystack)) {
-                    return true;
-                }
+        $preferredKeys = ['packets', 'frames', 'total', 'value', 'count'];
+        $sections = [$data];
+
+        foreach (['traffic', 'totals', 'statistics', 'stats'] as $containerKey) {
+            if (isset($data[$containerKey]) && is_array($data[$containerKey])) {
+                $sections[] = $data[$containerKey];
+            }
+        }
+
+        foreach ($sections as $section) {
+            if (!is_array($section)) {
                 continue;
             }
 
-            if (strpos($haystack, $needleLower) !== false) {
+            foreach ($directionKeys as $directionKey) {
+                if (!array_key_exists($directionKey, $section)) {
+                    continue;
+                }
+
+                $candidate = self::extractNumericCandidate($section[$directionKey], $preferredKeys);
+                if ($candidate !== null) {
+                    return $candidate;
+                }
+            }
+        }
+
+        foreach ($directionKeys as $directionKey) {
+            $value = self::resolvePath($data, [$directionKey]);
+            $numeric = self::extractNumericCandidate($value, $preferredKeys);
+            if ($numeric !== null) {
+                return $numeric;
+            }
+        }
+
+        return null;
+    }
+
+    private static function writeCache(string $cacheFile, int $timestamp, array $summary): void
+    {
+        @file_put_contents($cacheFile, json_encode([
+            'timestamp' => $timestamp,
+            'data' => $summary,
+        ]));
+    }
+
+    private static function hasNumericMetrics(array $summary): bool
+    {
+        foreach (['users_online', 'pkts_tx', 'pkts_rx', 'pkts_rtx'] as $metric) {
+            if ($summary[$metric] !== null) {
                 return true;
             }
         }
@@ -480,59 +313,18 @@ class AprscStatus
         return false;
     }
 
+    private static function isTrafficActive(?int $current, ?int $previous): bool
+    {
+        if ($current === null || $previous === null) {
+            return false;
+        }
+
+        return $current > $previous;
+    }
+
     /**
-     * @param array<int, string> $values
+     * @param mixed $value
      */
-    private static function extractFirstNumber(array $values): ?int
-    {
-        foreach ($values as $value) {
-            $number = self::extractNumber($value);
-            if ($number !== null) {
-                return $number;
-            }
-        }
-
-        return null;
-    }
-
-    private static function extractNumber(string $value): ?int
-    {
-        if (preg_match('/([\d][\d\s,.]*)/', $value, $matches)) {
-            $numeric = str_replace(["\xc2\xa0", ' '], '', $matches[1]);
-            $numeric = str_replace(',', '.', $numeric);
-
-            if ($numeric === '') {
-                return null;
-            }
-
-            if (substr_count($numeric, '.') > 1) {
-                $numeric = str_replace('.', '', $numeric);
-            }
-
-            $floatValue = (float) $numeric;
-
-            if (!is_finite($floatValue)) {
-                return null;
-            }
-
-            return (int) floor($floatValue + 0.5);
-        }
-
-        return null;
-    }
-
-    private static function extractNumberFromHtml(string $html, array $keywords): ?int
-    {
-        foreach ($keywords as $keyword) {
-            $pattern = sprintf('/%s[^\d]*([\d][\d\s,.]*)/i', preg_quote($keyword, '/'));
-            if (preg_match($pattern, $html, $matches)) {
-                return self::extractNumber($matches[1]);
-            }
-        }
-
-        return null;
-    }
-
     private static function castValue($value): ?int
     {
         if ($value === null) {
@@ -547,46 +339,66 @@ class AprscStatus
             return (int) round($value);
         }
 
-        if (is_numeric($value)) {
-            return (int) round((float) $value);
-        }
-
-        return self::extractNumber((string) $value);
-    }
-
-    private static function isTrafficActive(?int $currentValue, $previousValue): bool
-    {
-        $previous = self::castValue($previousValue);
-
-        if ($currentValue === null || $previous === null) {
-            return false;
-        }
-
-        if ($currentValue === $previous) {
-            return false;
-        }
-
-        // Consider both increases and counter resets as activity.
-        return true;
-    }
-
-    private static function hasNumericMetrics(array $summary): bool
-    {
-        foreach (['users_online', 'pkts_tx', 'pkts_rx', 'pkts_rtx'] as $key) {
-            if (array_key_exists($key, $summary) && $summary[$key] !== null) {
-                return true;
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '' || !preg_match('/[0-9]/', $trimmed)) {
+                return null;
             }
+
+            $normalized = str_replace([",", "\xc2\xa0", ' '], ['', '', ''], $trimmed);
+            if (!is_numeric($normalized)) {
+                $normalized = preg_replace('/[^0-9.-]/', '', $normalized ?? '');
+            }
+
+            if ($normalized === '' || !is_numeric($normalized)) {
+                return null;
+            }
+
+            return (int) round((float) $normalized);
         }
 
-        return false;
+        return null;
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param array<string, mixed>|mixed $value
+     * @param array<int, string> $preferredKeys
+     */
+    private static function extractNumericCandidate($value, array $preferredKeys): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (!is_array($value)) {
+            return self::castValue($value);
+        }
+
+        foreach ($preferredKeys as $key) {
+            if (array_key_exists($key, $value)) {
+                $numeric = self::castValue($value[$key]);
+                if ($numeric !== null) {
+                    return $numeric;
+                }
+            }
+        }
+
+        foreach ($value as $subValue) {
+            $numeric = self::extractNumericCandidate($subValue, $preferredKeys);
+            if ($numeric !== null) {
+                return $numeric;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed>|mixed $data
      * @param array<int, string> $path
      * @return mixed
      */
-    private static function resolvePath(array $data, array $path)
+    private static function resolvePath($data, array $path)
     {
         $node = $data;
         foreach ($path as $segment) {
@@ -597,121 +409,5 @@ class AprscStatus
         }
 
         return $node;
-    }
-
-    private static function detectContentType(array $headers): string
-    {
-        foreach ($headers as $header) {
-            if (stripos($header, 'content-type:') === 0) {
-                return trim(substr($header, strlen('content-type:')));
-            }
-        }
-
-        return '';
-    }
-
-    private static function looksLikeJson(string $payload, string $contentType): bool
-    {
-        if ($contentType !== '' && stripos($contentType, 'application/json') !== false) {
-            return true;
-        }
-
-        $trimmed = ltrim($payload);
-
-        return $trimmed !== '' && ($trimmed[0] === '{' || $trimmed[0] === '[');
-    }
-
-    private static function writeCache(string $cacheFile, int $timestamp, array $summary): void
-    {
-        @file_put_contents($cacheFile, json_encode([
-            'timestamp' => $timestamp,
-            'data' => $summary,
-        ]));
-    }
-
-    /**
-     * @param array<string, mixed>|mixed $value
-     */
-    private static function extractNumericCandidate($value, array $preferredKeys): ?int
-    {
-        if (is_array($value)) {
-            foreach ($preferredKeys as $preferredKey) {
-                if (array_key_exists($preferredKey, $value)) {
-                    $numeric = self::castValue($value[$preferredKey]);
-                    if ($numeric !== null) {
-                        return $numeric;
-                    }
-                }
-            }
-
-            $best = null;
-            foreach ($value as $subValue) {
-                $candidate = self::extractNumericCandidate($subValue, $preferredKeys);
-                if ($candidate !== null) {
-                    if ($best === null || $candidate > $best) {
-                        $best = $candidate;
-                    }
-                }
-            }
-
-            return $best;
-        }
-
-        return self::castValue($value);
-    }
-
-    /**
-     * @param array<string, mixed>|mixed $data
-     * @param array<int, string> $patterns
-     */
-    private static function extractNumericByKeyPatterns($data, array $patterns, array $preferredKeys): ?int
-    {
-        $patterns = array_map('strtolower', $patterns);
-        $candidates = [];
-        self::collectNumericCandidates($data, $patterns, $preferredKeys, $candidates);
-
-        if (empty($candidates)) {
-            return null;
-        }
-
-        rsort($candidates, SORT_NUMERIC);
-
-        return $candidates[0];
-    }
-
-    /**
-     * @param array<string, mixed>|mixed $node
-     * @param array<int, string> $patterns
-     * @param array<int, string> $preferredKeys
-     * @param array<int, int> $candidates
-     */
-    private static function collectNumericCandidates($node, array $patterns, array $preferredKeys, array &$candidates): void
-    {
-        if (!is_array($node)) {
-            return;
-        }
-
-        foreach ($node as $key => $value) {
-            $keyLower = is_string($key) ? strtolower($key) : '';
-
-            if ($keyLower !== '' && self::matchesAny($keyLower, $patterns)) {
-                $candidate = self::extractNumericCandidate($value, $preferredKeys);
-                if ($candidate !== null) {
-                    $candidates[] = $candidate;
-                }
-            }
-
-            if (is_array($value)) {
-                self::collectNumericCandidates($value, $patterns, $preferredKeys, $candidates);
-                continue;
-            }
-
-            if ($keyLower !== '' && self::matchesAny($keyLower, $patterns)) {
-                $candidate = self::castValue($value);
-                if ($candidate !== null) {
-                    $candidates[] = $candidate;
-                }
-            }
-        }
     }
 }
