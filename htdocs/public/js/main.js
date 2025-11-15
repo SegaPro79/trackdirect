@@ -72,6 +72,15 @@ jQuery(document).ready(function ($) {
       refreshInterval = 10000;
     }
 
+    var ACTIVITY_DURATION = 4000;
+    var LAMP_STATES = ['off', 'connected', 'activity'];
+    var activityTimers = { tx: null, rx: null };
+    var state = {
+      connected: false,
+      txActivity: false,
+      rxActivity: false
+    };
+
     function toInt(value) {
       if (value === null || typeof value === 'undefined' || value === '') {
         return null;
@@ -80,45 +89,188 @@ jQuery(document).ready(function ($) {
       return isNaN(parsed) ? null : parsed;
     }
 
-    function updateIndicator($indicator, $lamp, isActive, label) {
-      var active = !!isActive;
-      $lamp.toggleClass('is-active', active);
-      if ($indicator && $indicator.length) {
-        $indicator.attr('title', label + ' ' + (active ? 'active' : 'idle'));
-        $indicator.attr('data-state', active ? 'active' : 'idle');
+    function toBool(value) {
+      if (typeof value === 'boolean') {
+        return value;
       }
+      if (typeof value === 'number') {
+        return value !== 0;
+      }
+      if (typeof value === 'string') {
+        var trimmed = value.trim().toLowerCase();
+        if (trimmed === '' || trimmed === '0' || trimmed === 'false' || trimmed === 'no') {
+          return false;
+        }
+        return true;
+      }
+      return !!value;
+    }
+
+    function clearActivityTimer(type) {
+      if (activityTimers[type]) {
+        clearTimeout(activityTimers[type]);
+        activityTimers[type] = null;
+      }
+    }
+
+    function setLampState($indicator, $lamp, stateName, label) {
+      var normalized = LAMP_STATES.indexOf(stateName) !== -1 ? stateName : 'off';
+      if ($lamp && $lamp.length) {
+        $lamp.removeClass('lamp-off lamp-connected lamp-activity').addClass('lamp-' + normalized);
+      }
+      if ($indicator && $indicator.length) {
+        $indicator.attr('data-state', normalized);
+        if (label) {
+          var descriptor = normalized === 'activity' ? 'activity' : (normalized === 'connected' ? 'connected' : 'offline');
+          $indicator.attr('title', label + ' ' + descriptor);
+        }
+      }
+    }
+
+    function setUsersValue(value) {
+      if (value === null) {
+        $usersValue.text('N/A');
+        return;
+      }
+
+      var numericValue = Number(value);
+      if (!isNaN(numericValue) && isFinite(numericValue)) {
+        try {
+          $usersValue.text(numericValue.toLocaleString());
+          return;
+        } catch (error) {
+          // fall through to raw output
+        }
+      }
+
+      $usersValue.text(value);
+    }
+
+    function setConnectionState(isConnected) {
+      state.connected = !!isConnected;
+
+      if (!state.connected) {
+        clearActivityTimer('tx');
+        clearActivityTimer('rx');
+        state.txActivity = false;
+        state.rxActivity = false;
+        setLampState($txIndicator, $txLamp, 'off', 'TX');
+        setLampState($rxIndicator, $rxLamp, 'off', 'RX');
+        return;
+      }
+
+      if (!state.txActivity) {
+        setLampState($txIndicator, $txLamp, 'connected', 'TX');
+      }
+      if (!state.rxActivity) {
+        setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+      }
+    }
+
+    function markTxActivity() {
+      if (!state.connected) {
+        return;
+      }
+
+      state.txActivity = true;
+      setLampState($txIndicator, $txLamp, 'activity', 'TX');
+      clearActivityTimer('tx');
+      activityTimers.tx = window.setTimeout(function () {
+        activityTimers.tx = null;
+        state.txActivity = false;
+        if (state.connected) {
+          setLampState($txIndicator, $txLamp, 'connected', 'TX');
+        } else {
+          setLampState($txIndicator, $txLamp, 'off', 'TX');
+        }
+      }, ACTIVITY_DURATION);
+    }
+
+    function markRxActivity() {
+      if (!state.connected) {
+        return;
+      }
+
+      state.rxActivity = true;
+      setLampState($rxIndicator, $rxLamp, 'activity', 'RX');
+      clearActivityTimer('rx');
+      activityTimers.rx = window.setTimeout(function () {
+        activityTimers.rx = null;
+        state.rxActivity = false;
+        if (state.connected) {
+          setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+        } else {
+          setLampState($rxIndicator, $rxLamp, 'off', 'RX');
+        }
+      }, ACTIVITY_DURATION);
     }
 
     function applyStatus(status) {
       if (typeof status !== 'object' || status === null) {
+        setConnectionState(false);
+        setUsersValue(null);
+        return;
+      }
+
+      var connected = toBool(status.connected);
+      setConnectionState(connected);
+
+      if (!connected) {
+        setUsersValue(null);
         return;
       }
 
       var users = toInt(status.users_online);
-      if (users === null) {
-        $usersValue.text('N/A');
-      } else {
-        try {
-          $usersValue.text(users.toLocaleString());
-        } catch (error) {
-          $usersValue.text(users);
-        }
+      setUsersValue(users);
+
+      if (toBool(status.tx_active)) {
+        markTxActivity();
       }
 
-      updateIndicator($txIndicator, $txLamp, status.tx_active, 'TX');
-      updateIndicator($rxIndicator, $rxLamp, status.rx_active, 'RX');
+      if (!state.rxActivity) {
+        setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+      }
     }
 
-    applyStatus({
-      users_online: toInt($footer.data('usersOnline')),
-      tx_active: !!$footer.data('txActive'),
-      rx_active: !!$footer.data('rxActive')
-    });
+    var initialConnected = toBool($footer.data('connected'));
+    setConnectionState(initialConnected);
+    if (initialConnected) {
+      setUsersValue(toInt($footer.data('usersOnline')));
+    } else {
+      setUsersValue(null);
+    }
+
+    if (initialConnected && toBool($footer.data('txActivity'))) {
+      markTxActivity();
+    }
+
+    $(document).on('trackdirect:rx-activity', markRxActivity);
+    $(document).on('trackdirect:tx-activity', markTxActivity);
+
+    var websocketHooked = false;
+    if (typeof trackdirect !== 'undefined' && trackdirect && typeof trackdirect.addListener === 'function') {
+      trackdirect.addListener('trackdirect-init-done', function () {
+        if (websocketHooked) {
+          return;
+        }
+
+        if (trackdirect._websocket && typeof trackdirect._websocket.addListener === 'function') {
+          websocketHooked = true;
+          trackdirect._websocket.addListener('aprs-packet', function () {
+            markRxActivity();
+          });
+        }
+      });
+    }
 
     function pollAprscStatus() {
       $.getJSON(endpoint, { _: Date.now() })
         .done(function (data) {
           applyStatus(data);
+        })
+        .fail(function () {
+          setConnectionState(false);
+          setUsersValue(null);
         });
     }
 

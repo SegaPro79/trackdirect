@@ -36,6 +36,7 @@ class AprscStatus
         }
 
         $summary = [
+            'connected' => false,
             'users_online' => null,
             'pkts_tx' => null,
             'pkts_rx' => null,
@@ -56,15 +57,18 @@ class AprscStatus
         if ($html !== false && $html !== '') {
             $parsed = self::parseHtml($html);
             $summary = array_merge($summary, array_intersect_key($parsed, $summary));
+            $summary['connected'] = true;
         }
 
         $summary['tx_active'] = self::isTrafficActive($summary['pkts_tx'], $previousData['pkts_tx'] ?? null);
         $summary['rx_active'] = self::isTrafficActive($summary['pkts_rx'], $previousData['pkts_rx'] ?? null);
 
-        @file_put_contents($cacheFile, json_encode([
-            'timestamp' => $now,
-            'data' => $summary,
-        ]));
+        if ($summary['connected']) {
+            @file_put_contents($cacheFile, json_encode([
+                'timestamp' => $now,
+                'data' => $summary,
+            ]));
+        }
 
         return $summary;
     }
@@ -83,6 +87,7 @@ class AprscStatus
     private static function normalizeSummary(array $data): array
     {
         return [
+            'connected' => !empty($data['connected']),
             'users_online' => isset($data['users_online']) ? self::castValue($data['users_online']) : null,
             'pkts_tx' => isset($data['pkts_tx']) ? self::castValue($data['pkts_tx']) : null,
             'pkts_rx' => isset($data['pkts_rx']) ? self::castValue($data['pkts_rx']) : null,

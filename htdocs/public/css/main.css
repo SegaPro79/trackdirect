@@ -116,6 +116,17 @@ a:focus {
   min-height: 3rem;
 }
 
+@media screen and (min-width: 1024px) {
+  .site-header__inner {
+    padding: 0.6rem 1.75rem;
+  }
+
+  .topnav a,
+  .topnav .dropbtn {
+    min-height: 2.85rem;
+  }
+}
+
 .topnav a:hover,
 .topnav .dropbtn:hover,
 .topnav a:focus,
@@ -221,6 +232,7 @@ a:focus {
 }
 
 #svrclock {
+  display: none;
   margin-left: 1rem;
   font-variant-numeric: tabular-nums;
   color: rgba(255, 255, 255, 0.8);
@@ -321,15 +333,27 @@ a:focus {
   width: 0.85rem;
   height: 0.85rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  background: rgba(110, 122, 138, 0.4);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   transition: background-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.traffic-indicator__lamp.is-active,
-.traffic-indicator[data-state="active"] .traffic-indicator__lamp {
-  background: #42f584;
-  box-shadow: 0 0 12px rgba(66, 245, 132, 0.75);
+.traffic-indicator__lamp.lamp-off,
+.traffic-indicator[data-state="off"] .traffic-indicator__lamp {
+  background: rgba(110, 122, 138, 0.32);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.traffic-indicator__lamp.lamp-connected,
+.traffic-indicator[data-state="connected"] .traffic-indicator__lamp {
+  background: #38d67a;
+  box-shadow: 0 0 12px rgba(56, 214, 122, 0.75);
+}
+
+.traffic-indicator__lamp.lamp-activity,
+.traffic-indicator[data-state="activity"] .traffic-indicator__lamp {
+  background: #ff5f5f;
+  box-shadow: 0 0 14px rgba(255, 95, 95, 0.85);
 }
 
 .site-footer a {
@@ -355,6 +379,24 @@ a:focus {
 
   #svrclock {
     margin-left: 0;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  #right-container {
+    left: 0.75rem;
+    right: 0.75rem;
+    text-align: left;
+  }
+
+  #right-container-info {
+    padding: 0.5rem 0.75rem;
+  }
+
+  #status-container,
+  #cordinates-container {
+    white-space: normal;
+    text-align: left;
   }
 }
 
@@ -444,13 +486,9 @@ a:focus {
   padding-top: 5px;
   color: #b7c7d7;
   font-size: 11px;
-  display: none;
 }
-
-@media screen and (min-width: 800px) {
-  #cordinates-container {
-    display: block;
-  }
+#cordinates-container strong {
+  color: #f2f6fc;
 }
 
 /* The Modal (background) */
@@ -585,45 +623,46 @@ input[type=submit]:hover {
 
 #cordinates-container {
   clear: both;
-  padding-top:5px;
-  color: #4d4d4d;
+  padding-top: 5px;
+  color: #b7c7d7;
   font-size: 11px;
-  display: none;
+}
+
+#cordinates-container strong {
+  color: #f2f6fc;
 }
 
 #status-container {
-  padding-top:5px;
-  white-space:nowrap;
+  padding-top: 4px;
+  white-space: nowrap;
   line-height: 20px;
   font-size: 11px;
-}
-
-@media screen and (min-width: 800px) {
-  #cordinates-container {
-    display: block;
-  }
+  color: #dfe7ef;
 }
 
 #right-container {
   position: absolute;
-  right: 0px;
+  top: 1.5rem;
+  right: 1.5rem;
   text-align: right;
+  z-index: 150;
 }
 
-#right-container-info, #right-container-filtered, #right-container-timetravel {
-  position:relative;
-  right:10px;
-  z-index:50;
-  background:rgba(255, 255, 255, 0.5);
-  border-radius: 5px;
-  border: 1px solid #aaa;
-  padding:2px;
-
-  color: #4d4d4d;
-  font-size:11px;
-  font-family: "Sans-serif", "Helvetica";
-
-  margin-bottom: 15px;
+#right-container-info,
+#right-container-filtered,
+#right-container-timetravel {
+  position: relative;
+  right: 0;
+  z-index: 50;
+  background: rgba(8, 15, 22, 0.72);
+  border-radius: 8px;
+  border: 1px solid rgba(118, 194, 255, 0.25);
+  padding: 0.4rem 0.75rem;
+  color: #dfe7ef;
+  font-size: 11px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 #right-container-filtered, #right-container-timetravel {
@@ -637,6 +676,24 @@ input[type=submit]:hover {
 #right-container-timetravel img {
   width:16px;
   float:left;
+}
+
+@media screen and (max-width: 640px) {
+  #right-container {
+    left: 0.75rem;
+    right: 0.75rem;
+    text-align: left;
+  }
+
+  #right-container-info {
+    padding: 0.5rem 0.75rem;
+  }
+
+  #status-container,
+  #cordinates-container {
+    white-space: normal;
+    text-align: left;
+  }
 }
 
 .modal-inner-content {
