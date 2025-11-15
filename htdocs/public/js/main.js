@@ -45,6 +45,86 @@ jQuery(document).ready(function ($) {
   for (x=0; x<24; x++) {
     $("#timetravel-time").append(new Option((x < 10 ? '0':'')+x+':00', (x < 10 ? '0':'')+x+':00'));
   }
+
+  (function initAprscFooterStatus() {
+    var $footer = $('.site-footer');
+    if ($footer.length === 0) {
+      return;
+    }
+
+    var endpoint = $footer.data('aprscEndpoint');
+    if (!endpoint) {
+      return;
+    }
+
+    var $usersValue = $('#footer-users-online');
+    var $txIndicator = $('#footer-tx-indicator');
+    var $txLamp = $('#footer-tx-lamp');
+    var $rxIndicator = $('#footer-rx-indicator');
+    var $rxLamp = $('#footer-rx-lamp');
+
+    if ($usersValue.length === 0 || $txLamp.length === 0 || $rxLamp.length === 0) {
+      return;
+    }
+
+    var refreshInterval = parseInt($footer.data('refreshInterval'), 10);
+    if (!refreshInterval || refreshInterval < 3000) {
+      refreshInterval = 10000;
+    }
+
+    function toInt(value) {
+      if (value === null || typeof value === 'undefined' || value === '') {
+        return null;
+      }
+      var parsed = parseInt(value, 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+
+    function updateIndicator($indicator, $lamp, isActive, label) {
+      var active = !!isActive;
+      $lamp.toggleClass('is-active', active);
+      if ($indicator && $indicator.length) {
+        $indicator.attr('title', label + ' ' + (active ? 'active' : 'idle'));
+        $indicator.attr('data-state', active ? 'active' : 'idle');
+      }
+    }
+
+    function applyStatus(status) {
+      if (typeof status !== 'object' || status === null) {
+        return;
+      }
+
+      var users = toInt(status.users_online);
+      if (users === null) {
+        $usersValue.text('N/A');
+      } else {
+        try {
+          $usersValue.text(users.toLocaleString());
+        } catch (error) {
+          $usersValue.text(users);
+        }
+      }
+
+      updateIndicator($txIndicator, $txLamp, status.tx_active, 'TX');
+      updateIndicator($rxIndicator, $rxLamp, status.rx_active, 'RX');
+    }
+
+    applyStatus({
+      users_online: toInt($footer.data('usersOnline')),
+      tx_active: !!$footer.data('txActive'),
+      rx_active: !!$footer.data('rxActive')
+    });
+
+    function pollAprscStatus() {
+      $.getJSON(endpoint, { _: Date.now() })
+        .done(function (data) {
+          applyStatus(data);
+        });
+    }
+
+    pollAprscStatus();
+    setInterval(pollAprscStatus, refreshInterval);
+  })();
 });
 
 function wxGaugeParams(id) {

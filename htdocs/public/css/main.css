@@ -296,6 +296,42 @@ a:focus {
   color: #ffffff;
 }
 
+.site-footer__traffic {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.traffic-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: default;
+}
+
+.traffic-indicator__label {
+  font-size: 0.85rem;
+}
+
+.traffic-indicator__lamp {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.traffic-indicator__lamp.is-active,
+.traffic-indicator[data-state="active"] .traffic-indicator__lamp {
+  background: #42f584;
+  box-shadow: 0 0 12px rgba(66, 245, 132, 0.75);
+}
+
 .site-footer a {
   color: #76c2ff;
 }
@@ -441,13 +477,17 @@ a:focus {
 }
 
 /* Modal Content */
-.modal-content, .modal-long-content {
-  background-color: #fff;
+.modal-content,
+.modal-long-content {
   margin: auto;
-  padding: 0px;
-  border: 1px solid #888;
+  padding: 0;
   width: 80%;
   max-width: 1200px;
+  background: radial-gradient(circle at top, rgba(31, 44, 57, 0.96) 0%, rgba(13, 19, 25, 0.96) 80%);
+  border: 1px solid rgba(118, 194, 255, 0.22);
+  border-radius: 12px;
+  box-shadow: 0 32px 60px rgba(0, 0, 0, 0.55);
+  color: #e2ecf7;
 }
 
 .modal-long-content {
@@ -467,7 +507,7 @@ a:focus {
 
 /* Modal Close Button */
 .modal-close {
-  color: #aaaaaa;
+  color: rgba(255, 255, 255, 0.7);
   float: right;
   font-size: 28px;
   font-weight: bold;
@@ -475,7 +515,7 @@ a:focus {
 }
 .modal-close:hover,
 .modal-close:focus {
-  color: #000;
+  color: #ffffff;
   text-decoration: none;
   cursor: pointer;
 }
@@ -486,14 +526,16 @@ a:focus {
   margin: 15px 15px 15px 20px;
   float: left;
   font-family: "Sans-serif", "Helvetica" !important;
+  color: #f5f9ff;
 }
 
 .modal-content-header {
   width: 100%;
   height: 55px;
-  border-bottom: 1px solid #e9ecef;
-  border-top-left-radius: 0.3rem;
-  border-top-right-radius: 0.3rem;
+  border-bottom: 1px solid rgba(118, 194, 255, 0.18);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  background: linear-gradient(90deg, rgba(22, 31, 41, 0.95) 0%, rgba(29, 41, 53, 0.95) 100%);
 }
 
 .modal-content-body {
@@ -501,6 +543,7 @@ a:focus {
   margin: 0px;
   padding: 0px;
   overflow: auto;
+  background: rgba(10, 15, 20, 0.9);
 }
 
 input[type=text], select, textarea {
@@ -600,16 +643,43 @@ input[type=submit]:hover {
   max-width: 1100px;
   height: 100%;
 
-  padding-top: 10px;
-  padding-left: 30px;
-  padding-right: 30px;
-  padding-bottom: 10px;
+  padding-top: 20px;
+  padding-left: 32px;
+  padding-right: 32px;
+  padding-bottom: 24px;
 
   margin-left: auto;
   margin-right: auto;
 
   font-size: 9pt;
   font-family: "Sans-serif", "Helvetica";
+  background: linear-gradient(135deg, rgba(19, 27, 36, 0.92) 0%, rgba(10, 15, 22, 0.92) 100%);
+  border: 1px solid rgba(118, 194, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  color: #d5e2f0;
+}
+
+.modal-inner-content p,
+.modal-inner-content li,
+.modal-inner-content label {
+  color: inherit;
+}
+
+.modal-inner-content h1,
+.modal-inner-content h2,
+.modal-inner-content h3,
+.modal-inner-content h4 {
+  color: #f4f9ff;
+  letter-spacing: 0.02em;
+}
+
+.modal-inner-content table {
+  color: inherit;
+}
+
+.modal-inner-content strong {
+  color: #ffffff;
 }
 
 
@@ -652,7 +722,7 @@ input[type=submit]:hover {
   float:left;
   width:200px;
   text-align:left;
-  color: grey;
+  color: rgba(255, 255, 255, 0.7);
   font-family: "Helvetica";
   font-size: 13px;
   display: none;
@@ -662,7 +732,7 @@ input[type=submit]:hover {
 .overview-content-symbol h3 {
   font-size: 12px;
   font-weight: bold;
-  color: grey;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .overview-content-symbol p {
@@ -708,12 +778,9 @@ input[type=submit]:hover {
   color: #440B2A;
 }
 
-.overview-content-packet-frequency span:nth-of-type(2){
-  color: grey;
-}
-
+.overview-content-packet-frequency span:nth-of-type(2),
 .overview-content-number-of-packets span {
-  color: grey;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .overview-content-station span {
@@ -743,7 +810,7 @@ input[type=submit]:hover {
 }
 
 .overview-content-station-list span span {
-  color: grey;
+  color: rgba(255, 255, 255, 0.6);
   float: right;
   padding-right: 50px;
   font-weight: normal;
@@ -926,7 +993,7 @@ input[type=submit]:hover {
   height: 1px;
   margin: 5px 0px 25px 0px;
   padding: 0;
-  background-color: #e9ecef;
+  background: linear-gradient(90deg, rgba(118, 194, 255, 0.35) 0%, rgba(118, 194, 255, 0) 100%);
   clear: both;
   margin-top: 3px;
 }
@@ -1016,12 +1083,14 @@ input[type=submit]:hover {
 
 .datagrid {
   font: normal 12px/150% Arial, Helvetica, sans-serif;
-  background: #fff;
+  background: rgba(16, 24, 32, 0.94);
   overflow: hidden;
-  border: 1px solid #c3c3c3;
-  -webkit-border-radius: 3px;
-  -moz-border-radius: 3px;
-  border-radius: 3px;
+  border: 1px solid rgba(118, 194, 255, 0.18);
+  -webkit-border-radius: 10px;
+  -moz-border-radius: 10px;
+  border-radius: 10px;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
+  color: #dce7f5;
 }
 
 .datagrid table td, .datagrid table th {
@@ -1029,30 +1098,31 @@ input[type=submit]:hover {
 }
 
 .datagrid table thead th {
-  background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #E8E8E8), color-stop(1, #D1D1D1) );
-  background:-moz-linear-gradient( center top, #E8E8E8 5%, #D1D1D1 100% );
-  filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#E8E8E8', endColorstr='#D1D1D1');
-  background-color:#E8E8E8;
-  color:#636363;
+  background: linear-gradient(180deg, rgba(36, 52, 68, 0.95) 0%, rgba(21, 30, 40, 0.95) 100%);
+  color:#f4f9ff;
   font-size: 13px;
   font-weight: bold;
-  border-left: 1px solid #A3A3A3;
+  border-left: 1px solid rgba(118, 194, 255, 0.22);
   line-height: 21px;
   padding: 0px 10px
 }
 
 .datagrid table tbody td {
-  color: #404040;
-  border-left: 1px solid #DBDBDB;
+  color: #d5e2f0;
+  border-left: 1px solid rgba(118, 194, 255, 0.12);
   font-size: 12px;
   font-weight: normal;
   line-height: 18px;
   vertical-align: top;
 }
 
+.datagrid table tbody tr {
+  background: rgba(13, 21, 29, 0.9);
+}
+
 .datagrid table tbody tr:nth-child(odd) {
-  background: #F4F4F4;
-  color: #404040;
+  background: rgba(24, 34, 45, 0.92);
+  color: #d5e2f0;
 }
 
 .datagrid table tbody td:first-child {
@@ -1078,7 +1148,7 @@ input[type=submit]:hover {
 }
 
 .pagination a {
-  color: black;
+  color: rgba(255, 255, 255, 0.75);
   float: left;
   padding: 8px 16px;
   text-decoration: none;
@@ -1090,14 +1160,15 @@ input[type=submit]:hover {
 }
 
 .pagination a.active {
-  background-color: #4CAF50;
-  color: white;
+  background-color: #42f584;
+  color: #02140a;
   border-radius: 5px;
 }
 
 .pagination a:hover:not(.active) {
-  background-color: #ddd;
+  background-color: rgba(118, 194, 255, 0.18);
   border-radius: 5px;
+  color: #ffffff;
 }
 
 @media screen and (max-width: 600px) {
@@ -1107,6 +1178,16 @@ input[type=submit]:hover {
 
   #raw-type {
     display: none;
+  }
+
+  .site-footer__traffic {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.9rem;
+  }
+
+  .traffic-indicator__label {
+    font-size: 0.75rem;
   }
 }
 

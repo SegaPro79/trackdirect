@@ -4,10 +4,10 @@ $aprscStatus = AprscStatus::getSummary();
 $formatStatusValue = static function (?int $value): string {
     return $value !== null ? number_format($value) : 'N/A';
 };
-$usersOnlineDisplay = $formatStatusValue($aprscStatus['users_online'] ?? null);
-$txDisplay = $formatStatusValue($aprscStatus['pkts_tx'] ?? null);
-$rxDisplay = $formatStatusValue($aprscStatus['pkts_rx'] ?? null);
-$rtxDisplay = $formatStatusValue($aprscStatus['pkts_rtx'] ?? null);
+$usersOnlineValue = $aprscStatus['users_online'] ?? null;
+$usersOnlineDisplay = $formatStatusValue($usersOnlineValue);
+$txActive = !empty($aprscStatus['tx_active']);
+$rxActive = !empty($aprscStatus['rx_active']);
 ?>
 
 <!DOCTYPE html>
@@ -417,16 +417,29 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
             </div>
         </main>
 
-        <footer class="site-footer">
+        <footer
+            class="site-footer"
+            data-aprsc-endpoint="/status/aprsc_status.php"
+            data-refresh-interval="10000"
+            data-users-online="<?php echo $usersOnlineValue !== null ? htmlspecialchars((string) $usersOnlineValue, ENT_QUOTES, 'UTF-8') : ''; ?>"
+            data-tx-active="<?php echo $txActive ? '1' : '0'; ?>"
+            data-rx-active="<?php echo $rxActive ? '1' : '0'; ?>"
+        >
             <div class="site-footer__left">
                 <span class="site-footer__label">Users Online:</span>
-                <span class="site-footer__value"><?php echo $usersOnlineDisplay; ?></span>
+                <span class="site-footer__value" id="footer-users-online"><?php echo $usersOnlineDisplay; ?></span>
             </div>
             <div class="site-footer__right">
-                <span class="site-footer__metrics">
-                    TX: <?php echo $txDisplay; ?> | RX: <?php echo $rxDisplay; ?><?php if ($rtxDisplay !== 'N/A') : ?> | RTX: <?php echo $rtxDisplay; ?><?php endif; ?>
-                </span>
-                <span class="site-footer__copyright">&copy; 2022-2026 <?php echo getWebsiteConfig('owner_name'); ?>. Based on <a target="_blank" href="https://www.aprsdirect.com">APRS Track Direct</a></span>
+                <div class="site-footer__traffic" role="group" aria-label="APRSC traffic state">
+                    <span class="traffic-indicator" id="footer-tx-indicator" title="<?php echo $txActive ? 'TX active' : 'TX idle'; ?>">
+                        <span class="traffic-indicator__label">TX</span>
+                        <span class="traffic-indicator__lamp<?php echo $txActive ? ' is-active' : ''; ?>" id="footer-tx-lamp" aria-hidden="true"></span>
+                    </span>
+                    <span class="traffic-indicator" id="footer-rx-indicator" title="<?php echo $rxActive ? 'RX active' : 'RX idle'; ?>">
+                        <span class="traffic-indicator__label">RX</span>
+                        <span class="traffic-indicator__lamp<?php echo $rxActive ? ' is-active' : ''; ?>" id="footer-rx-lamp" aria-hidden="true"></span>
+                    </span>
+                </div>
             </div>
         </footer>
 

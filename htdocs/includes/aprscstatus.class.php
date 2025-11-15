@@ -3,7 +3,7 @@
 class AprscStatus
 {
     private const STATUS_URL = 'https://aprsc.aprsdirect.de/';
-    private const CACHE_TTL = 20; // seconds
+    private const CACHE_TTL = 10; // seconds
 
     /**
      * Fetch and summarize APRSC status metrics.
@@ -12,25 +12,27 @@ class AprscStatus
      *     users_online: ?int,
      *     pkts_tx: ?int,
      *     pkts_rx: ?int,
-     *     pkts_rtx: ?int
+     *     pkts_rtx: ?int,
+     *     tx_active: bool,
+     *     rx_active: bool
      * }
      */
     public static function getSummary(): array
     {
         $cacheFile = self::getCacheFilePath();
         $now = time();
+        $cachedPayload = null;
 
         if (is_readable($cacheFile)) {
-            $payload = json_decode((string) file_get_contents($cacheFile), true);
-            if (is_array($payload) && isset($payload['timestamp']) && ($now - (int) $payload['timestamp']) < self::CACHE_TTL) {
-                $data = $payload['data'] ?? [];
-                return [
-                    'users_online' => isset($data['users_online']) ? self::castValue($data['users_online']) : null,
-                    'pkts_tx' => isset($data['pkts_tx']) ? self::castValue($data['pkts_tx']) : null,
-                    'pkts_rx' => isset($data['pkts_rx']) ? self::castValue($data['pkts_rx']) : null,
-                    'pkts_rtx' => isset($data['pkts_rtx']) ? self::castValue($data['pkts_rtx']) : null,
-                ];
+            $cachedPayload = json_decode((string) file_get_contents($cacheFile), true);
+            if (is_array($cachedPayload) && isset($cachedPayload['timestamp']) && ($now - (int) $cachedPayload['timestamp']) < self::CACHE_TTL) {
+                return self::normalizeSummary($cachedPayload['data'] ?? []);
             }
+        }
+
+        $previousData = [];
+        if (is_array($cachedPayload) && isset($cachedPayload['data']) && is_array($cachedPayload['data'])) {
+            $previousData = $cachedPayload['data'];
         }
 
         $summary = [
@@ -38,6 +40,8 @@ class AprscStatus
             'pkts_tx' => null,
             'pkts_rx' => null,
             'pkts_rtx' => null,
+            'tx_active' => false,
+            'rx_active' => false,
         ];
 
         $context = stream_context_create([
@@ -54,12 +58,38 @@ class AprscStatus
             $summary = array_merge($summary, array_intersect_key($parsed, $summary));
         }
 
+        $summary['tx_active'] = self::isTrafficActive($summary['pkts_tx'], $previousData['pkts_tx'] ?? null);
+        $summary['rx_active'] = self::isTrafficActive($summary['pkts_rx'], $previousData['pkts_rx'] ?? null);
+
         @file_put_contents($cacheFile, json_encode([
             'timestamp' => $now,
             'data' => $summary,
         ]));
 
         return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{
+     *     users_online: ?int,
+     *     pkts_tx: ?int,
+     *     pkts_rx: ?int,
+     *     pkts_rtx: ?int,
+     *     tx_active: bool,
+     *     rx_active: bool
+     * }
+     */
+    private static function normalizeSummary(array $data): array
+    {
+        return [
+            'users_online' => isset($data['users_online']) ? self::castValue($data['users_online']) : null,
+            'pkts_tx' => isset($data['pkts_tx']) ? self::castValue($data['pkts_tx']) : null,
+            'pkts_rx' => isset($data['pkts_rx']) ? self::castValue($data['pkts_rx']) : null,
+            'pkts_rtx' => isset($data['pkts_rtx']) ? self::castValue($data['pkts_rtx']) : null,
+            'tx_active' => !empty($data['tx_active']),
+            'rx_active' => !empty($data['rx_active']),
+        ];
     }
 
     private static function getCacheFilePath(): string
@@ -223,5 +253,21 @@ class AprscStatus
         }
 
         return self::extractNumber((string) $value);
+    }
+
+    private static function isTrafficActive(?int $currentValue, $previousValue): bool
+    {
+        $previous = self::castValue($previousValue);
+
+        if ($currentValue === null || $previous === null) {
+            return false;
+        }
+
+        if ($currentValue === $previous) {
+            return false;
+        }
+
+        // Consider both increases and counter resets as activity.
+        return true;
     }
 }
