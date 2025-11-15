@@ -302,6 +302,45 @@ class Station extends Model
         }
     }
 
+    /**
+     * Get total number of stored packets for this station
+     *
+     * @return int|null
+     */
+    public function getTotalPackets()
+    {
+        if (!isInt($this->getId())) {
+            return null;
+        }
+
+        static $cache = array();
+        $cacheKey = $this->getId();
+
+        if (array_key_exists($cacheKey, $cache)) {
+            return $cache[$cacheKey];
+        }
+
+        if (isset($this->totalPackets) && is_numeric($this->totalPackets)) {
+            $cache[$cacheKey] = (int)$this->totalPackets;
+            return $cache[$cacheKey];
+        }
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec(
+            'select count(*) c from packet where station_id = ? and map_id in (1,2,5,7,9)',
+            [$this->getId()]
+        );
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!empty($record) && isset($record['c'])) {
+            $cache[$cacheKey] = (int)$record['c'];
+        } else {
+            $cache[$cacheKey] = null;
+        }
+
+        return $cache[$cacheKey];
+    }
+
     /*
      * Returnes symbol description
      * @param boolean $includeUndefinedOverlay
