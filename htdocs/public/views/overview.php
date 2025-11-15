@@ -55,6 +55,64 @@
   }
 ?>
 <?php if ($station->isExistingObject()) : ?>
+    <?php
+        $packetRepository = PacketRepository::getInstance();
+
+        $latestCommentText = null;
+        $latestCommentTimestamp = null;
+        $latestStatusText = null;
+        $latestStatusTimestamp = null;
+
+        $latestCommentPackets = $packetRepository->getLatestCommentPacketsForStationIds([$station->id]);
+        if (isset($latestCommentPackets[$station->id])) {
+            $commentData = $latestCommentPackets[$station->id];
+            if (!empty($commentData['comment'])) {
+                $latestCommentText = $commentData['comment'];
+                $latestCommentTimestamp = $commentData['timestamp'] ?? null;
+            }
+        }
+
+        $latestStatusPackets = $packetRepository->getLatestStatusPacketsForStationIds([$station->id]);
+        if (isset($latestStatusPackets[$station->id])) {
+            $statusData = $latestStatusPackets[$station->id];
+            if (!empty($statusData['comment'])) {
+                $latestStatusText = $statusData['comment'];
+                $latestStatusTimestamp = $statusData['timestamp'] ?? null;
+            }
+        }
+
+        $latestPositionLatitude = null;
+        $latestPositionLongitude = null;
+        $latestPositionTimestamp = null;
+        $latestPositionPacket = null;
+        $latestPositionSource = null;
+
+        if ($station->latestConfirmedPacketId !== null && $station->latestConfirmedPacketTimestamp !== null) {
+            $latestPositionLatitude = $station->latestConfirmedLatitude;
+            $latestPositionLongitude = $station->latestConfirmedLongitude;
+            $latestPositionTimestamp = $station->latestConfirmedPacketTimestamp;
+            $latestPositionPacket = $packetRepository->getObjectById($station->latestConfirmedPacketId, $station->latestConfirmedPacketTimestamp);
+            $latestPositionSource = 'confirmed';
+        } else {
+            if ($station->latestLocationLatitude !== null && $station->latestLocationLongitude !== null) {
+                $latestPositionLatitude = $station->latestLocationLatitude;
+                $latestPositionLongitude = $station->latestLocationLongitude;
+                $latestPositionTimestamp = $station->latestLocationPacketTimestamp;
+                if ($station->latestLocationPacketId !== null && $station->latestLocationPacketTimestamp !== null) {
+                    $latestPositionPacket = $packetRepository->getObjectById($station->latestLocationPacketId, $station->latestLocationPacketTimestamp);
+                }
+                $latestPositionSource = 'location';
+            }
+        }
+
+        $latestPositionHasCoordinates = $latestPositionLatitude !== null && $latestPositionLongitude !== null;
+        $geocodingAvailable = getWebsiteConfig('nominatim_geocoding_api') && $latestPositionHasCoordinates;
+        $latestPositionMatchesLatestPacket = $latestPositionSource === 'confirmed'
+            && $station->latestPacketId !== null
+            && $station->latestPacketTimestamp !== null
+            && $station->latestPacketId == $station->latestConfirmedPacketId
+            && $station->latestPacketTimestamp == $station->latestConfirmedPacketTimestamp;
+    ?>
     <title><?php echo $station->name; ?> Overview</title>
     <div class="modal-inner-content">
         <div class="modal-inner-content-menu">
@@ -155,9 +213,33 @@
                 </div>
             <?php endif; ?>
 
+            <?php if ($latestCommentText !== null) : ?>
+                <div>
+                    <div class="overview-content-summary-hr">Comment:</div>
+                    <div class="overview-content-summary-indent" title="Latest comment from this station">
+                        <?php if ($latestCommentTimestamp !== null) : ?>
+                            <span class="nts"<?php echo overviewTimestampAttributes($latestCommentTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestCommentTimestamp)); ?></span><br/>
+                        <?php endif; ?>
+                        <span id="overview-content-comment"><?php echo nl2br(htmlentities($latestCommentText)); ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($latestStatusText !== null) : ?>
+                <div>
+                    <div class="overview-content-summary-hr">Status:</div>
+                    <div class="overview-content-summary-indent" title="Latest status packet from this station">
+                        <?php if ($latestStatusTimestamp !== null) : ?>
+                            <span class="nts"<?php echo overviewTimestampAttributes($latestStatusTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestStatusTimestamp)); ?></span><br/>
+                        <?php endif; ?>
+                        <span id="overview-content-status"><?php echo nl2br(htmlentities($latestStatusText)); ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Latest Packet -->
             <?php if ($station->latestPacketId !== null) : ?>
-                <?php $latestPacket = PacketRepository::getInstance()->getObjectById($station->latestPacketId, $station->latestPacketTimestamp); ?>
+                <?php $latestPacket = $packetRepository->getObjectById($station->latestPacketId, $station->latestPacketTimestamp); ?>
                 <div class="overview-content-divider"></div>
 
                 <div>
@@ -277,18 +359,18 @@
             <?php endif;?>
 
             <!-- Latest Position -->
-            <?php if ($station->latestConfirmedPacketId !== null) : ?>
+            <?php if ($latestPositionHasCoordinates) : ?>
 
                 <div class="overview-content-divider"></div>
 
                 <div>
                     <div class="overview-content-summary-hr">Latest Position:</div>
                     <div id="overview-content-latest-position" class="overview-content-summary-cell-position" title="Latest position (that is approved by our filters)">
-                        <?php echo round($station->latestConfirmedLatitude, 5); ?>, <?php echo round($station->latestConfirmedLongitude, 5); ?>
+                        <?php echo round($latestPositionLatitude, 5); ?>, <?php echo round($latestPositionLongitude, 5); ?>
                     </div>
                 </div>
 
-              <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+              <?php if ($geocodingAvailable) : ?>
                 <div>
                     <div class="overview-content-summary-hr-indent">Location:</div>
                     <div id="position-location" class="overview-content-summary-indent" title="Latest position location">
@@ -311,14 +393,16 @@
 
                 <div>
                     <div class="overview-content-summary-hr-indent">Receive Time:</div>
-                    <?php if ($station->latestPacketId == $station->latestConfirmedPacketId && $station->latestPacketTimestamp == $station->latestConfirmedPacketTimestamp) : ?>
+                    <?php if ($latestPositionMatchesLatestPacket) : ?>
                         <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time">
                             (Received in latest packet)
                         </div>
-                    <?php else : ?>
-                        <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time"<?php echo overviewTimestampAttributes($station->latestConfirmedPacketTimestamp, false, 'L LTSZ'); ?>>
-                            <?php echo $station->latestConfirmedPacketTimestamp; ?>
+                    <?php elseif ($latestPositionTimestamp !== null) : ?>
+                        <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time"<?php echo overviewTimestampAttributes($latestPositionTimestamp, false, 'L LTSZ'); ?>>
+                            <?php echo $latestPositionTimestamp; ?>
                         </div>
+                    <?php else : ?>
+                        <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time">&nbsp;</div>
                     <?php endif; ?>
                 </div>
                 <div>
@@ -335,46 +419,45 @@
                 </div>
 
 
-                <?php $latestConfirmedPacket = PacketRepository::getInstance()->getObjectById($station->latestConfirmedPacketId, $station->latestConfirmedPacketTimestamp); ?>
-                <?php if ($latestConfirmedPacket->isExistingObject() && $latestConfirmedPacket->posambiguity > 0) : ?>
+                <?php if ($latestPositionSource === 'confirmed' && $latestPositionPacket !== null && $latestPositionPacket->isExistingObject() && $latestPositionPacket->posambiguity > 0) : ?>
                 <div>
                     <div class="overview-content-summary-hr-indent">Posambiguity:</div>
                     <div class="overview-content-summary-cell-posambiguity overview-content-summary-indent" title="If posambiguity is active the gps position is inaccurate">Yes</div>
                 </div>
                 <?php endif;?>
 
-                <?php if ($latestConfirmedPacket->isExistingObject()) : ?>
-                    <?php if ($latestConfirmedPacket->speed != '' || $latestConfirmedPacket->course != '' || $latestConfirmedPacket->altitude != '') : ?>
-                        <?php if (round($latestConfirmedPacket->speed) != 0 || round($latestConfirmedPacket->course) != 0 || round($latestConfirmedPacket->altitude) != 0) : ?>
+                <?php if ($latestPositionPacket !== null && $latestPositionPacket->isExistingObject()) : ?>
+                    <?php if ($latestPositionPacket->speed != '' || $latestPositionPacket->course != '' || $latestPositionPacket->altitude != '') : ?>
+                        <?php if (round($latestPositionPacket->speed) != 0 || round($latestPositionPacket->course) != 0 || round($latestPositionPacket->altitude) != 0) : ?>
 
-                            <?php if ($latestConfirmedPacket->speed != '') : ?>
+                            <?php if ($latestPositionPacket->speed != '') : ?>
                             <div>
                                 <div class="overview-content-summary-hr-indent">Speed:</div>
                                 <div title="Latest speed" class="overview-content-summary-indent" id="latest_speed">
                                     <?php if (isImperialUnitUser()) : ?>
-                                        <?php echo round(convertKilometerToMile($latestConfirmedPacket->speed), 2); ?> mph
+                                        <?php echo round(convertKilometerToMile($latestPositionPacket->speed), 2); ?> mph
                                     <?php else : ?>
-                                        <?php echo round($latestConfirmedPacket->speed, 2); ?> km/h
+                                        <?php echo round($latestPositionPacket->speed, 2); ?> km/h
                                     <?php endif; ?>
                                 </div>
                             </div>
                             <?php endif;?>
 
-                            <?php if ($latestConfirmedPacket->course != '') : ?>
+                            <?php if ($latestPositionPacket->course != '') : ?>
                             <div>
                                 <div class="overview-content-summary-hr-indent">Course:</div>
-                                <div title="Latest course" class="overview-content-summary-indent" id="latest_course"><?php echo $latestConfirmedPacket->course; ?>&deg;</div>
+                                <div title="Latest course" class="overview-content-summary-indent" id="latest_course"><?php echo $latestPositionPacket->course; ?>&deg;</div>
                             </div>
                             <?php endif;?>
 
-                            <?php if ($latestConfirmedPacket->altitude != '') : ?>
+                            <?php if ($latestPositionPacket->altitude != '') : ?>
                             <div>
                                 <div class="overview-content-summary-hr-indent">Altitude:</div>
                                 <div title="Latest altitude" class="overview-content-summary-indent" id="latest_altitude">
                                     <?php if (isImperialUnitUser()) : ?>
-                                        <?php echo round(convertMeterToFeet($latestConfirmedPacket->altitude), 2); ?> ft
+                                        <?php echo round(convertMeterToFeet($latestPositionPacket->altitude), 2); ?> ft
                                     <?php else : ?>
-                                        <?php echo round($latestConfirmedPacket->altitude, 2); ?> m
+                                        <?php echo round($latestPositionPacket->altitude, 2); ?> m
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -383,58 +466,57 @@
                         <?php endif;?>
                     <?php endif;?>
 
-                    <?php if ($latestConfirmedPacket->getPacketOgn()->isExistingObject()) : ?>
-                        <?php if ($latestConfirmedPacket->getPacketOgn()->ognClimbRate !== null) : ?>
+                    <?php if ($latestPositionPacket->getPacketOgn()->isExistingObject()) : ?>
+                        <?php if ($latestPositionPacket->getPacketOgn()->ognClimbRate !== null) : ?>
                             <div>
                                 <div class="overview-content-summary-hr-indent">Climb Rate:</div>
-                                <div class="overview-content-summary-indent" title="The climb rate in feet-per-minute"><?php echo $latestConfirmedPacket->getPacketOgn()->ognClimbRate; ?> fpm</div>
+                                <div class="overview-content-summary-indent" title="The climb rate in feet-per-minute"><?php echo $latestPositionPacket->getPacketOgn()->ognClimbRate; ?> fpm</div>
                             </div>
                         <?php endif;?>
 
-                        <?php if ($latestConfirmedPacket->getPacketOgn()->ognTurnRate !== null) : ?>
+                        <?php if ($latestPositionPacket->getPacketOgn()->ognTurnRate !== null) : ?>
                             <div>
                                 <?php $turnRateNote = true; ?>
                                 <div class="overview-content-summary-hr-indent">Turn Rate:</div>
-                                <div class="overview-content-summary-indent" title="Current turn rate."><?php echo $latestConfirmedPacket->getPacketOgn()->ognTurnRate; ?> rot</div>
+                                <div class="overview-content-summary-indent" title="Current turn rate."><?php echo $latestPositionPacket->getPacketOgn()->ognTurnRate; ?> rot</div>
                             </div>
                         <?php endif;?>
                     <?php endif;?>
                 <?php endif;?>
 
                 <!-- Latest PHG and RNG -->
-                <?php if ($latestConfirmedPacket && $latestConfirmedPacket->isExistingObject()) : ?>
-                    <?php if ($latestConfirmedPacket->phg != null || $latestConfirmedPacket->latestPhgTimestamp != null) : ?>
+                <?php if ($latestPositionPacket && $latestPositionPacket->isExistingObject()) : ?>
+                    <?php if ($latestPositionPacket->phg != null || $latestPositionPacket->latestPhgTimestamp != null) : ?>
                         <div class="overview-content-divider"></div>
                         <div>
                             <div class="overview-content-summary-hr">Latest PHG:</div>
                             <div class="overview-content-summary-cell-phg" title="Power-Height-Gain (and directivity)">
-                                <?php echo $latestConfirmedPacket->getPHGDescription(true); ?><br/>
+                                <?php echo $latestPositionPacket->getPHGDescription(true); ?><br/>
                                 (Calculated range:
                                     <?php if (isImperialUnitUser()) : ?>
-                                        <?php echo round(convertKilometerToMile($latestConfirmedPacket->getPHGRange(true)/1000),2); ?> miles)
+                                        <?php echo round(convertKilometerToMile($latestPositionPacket->getPHGRange(true)/1000),2); ?> miles)
                                     <?php else : ?>
-                                        <?php echo round($latestConfirmedPacket->getPHGRange(true)/1000,2); ?> km)
+                                        <?php echo round($latestPositionPacket->getPHGRange(true)/1000,2); ?> km)
                                     <?php endif; ?>
                             </div>
                         </div>
                     <?php endif;?>
 
-                    <?php if ($latestConfirmedPacket->rng != null || $latestConfirmedPacket->latestRngTimestamp != null) : ?>
+                    <?php if ($latestPositionPacket->rng != null || $latestPositionPacket->latestRngTimestamp != null) : ?>
                         <div class="overview-content-divider"></div>
                         <div>
                             <div class="overview-content-summary-hr">Latest RNG:</div>
                             <div class="overview-content-summary-cell-phg" title="The pre-calculated radio range">
                                 <?php if (isImperialUnitUser()) : ?>
-                                    <?php echo round(convertKilometerToMile($latestConfirmedPacket->getRng(true)), 2); ?> miles
+                                    <?php echo round(convertKilometerToMile($latestPositionPacket->getRng(true)), 2); ?> miles
                                 <?php else : ?>
-                                    <?php echo round($latestConfirmedPacket->getRng(true), 2); ?> km
+                                    <?php echo round($latestPositionPacket->getRng(true), 2); ?> km
                                 <?php endif; ?>
                             </div>
                         </div>
                     <?php endif;?>
                 <?php endif;?>
             <?php endif;?>
-
             <!-- Latest Symbols -->
             <?php $stationLatestSymbols = $station->getLatestIconFilePaths(22, 22); ?>
             <?php if ($stationLatestSymbols !== null && count($stationLatestSymbols) > 1) : ?>
@@ -460,7 +542,7 @@
                     <div class="overview-content-packet-frequency" title="Total packets recorded" id="total_packets"><span>retrieving ...</span></div>
                 </div>
 
-            <?php $stationLatestBulletinPacket = PacketRepository::getInstance()->getBulletinObjectListByStationId($station->id, 1, 0, 2);?>
+            <?php $stationLatestBulletinPacket = $packetRepository->getBulletinObjectListByStationId($station->id, 1, 0, 2);?>
             <?php if ($stationLatestBulletinPacket != null) : ?>
                 <div class="overview-content-divider"></div>
                 <div>
@@ -811,7 +893,7 @@
 
                 <?php endif; ?>
 
-                <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+                <?php if ($geocodingAvailable) : ?>
                     <li id="nominatim-license"></li>
                 <?php endif; ?>
 
@@ -856,10 +938,10 @@
             });
 
             if (window.trackdirect) {
-                <?php if ($station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+                <?php if ($latestPositionHasCoordinates) : ?>
                     window.trackdirect.addListener("map-created", function() {
                         if (!window.trackdirect.focusOnStation(<?php echo $station->id ?>, true)) {
-                            window.trackdirect.setCenter(<?php echo $station->latestConfirmedLatitude ?>, <?php echo $station->latestConfirmedLongitude ?>);
+                            window.trackdirect.setCenter(<?php echo json_encode($latestPositionLatitude); ?>, <?php echo json_encode($latestPositionLongitude); ?>);
                         }
                     });
                 <?php endif; ?>
@@ -868,9 +950,9 @@
                 });
             }
 
-          <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
-            $.getJSON('<?php echo getWebsiteConfig('nominatim_geocoding_api'); ?>/reverse?lat=<?php echo $station->latestConfirmedLatitude; ?>&lon=<?php echo $station->latestConfirmedLongitude; ?>&format=json').done(function(response) {
-              $.getJSON('/data/data.php?module=geocoding&command=getLocalTime&id=<?php echo $station->id; ?>&lat=<?php echo $station->latestConfirmedLatitude; ?>&lon=<?php echo $station->latestConfirmedLongitude; ?>&cc=' + response.address.country_code).done(function(response) {
+          <?php if ($geocodingAvailable) : ?>
+            $.getJSON('<?php echo getWebsiteConfig('nominatim_geocoding_api'); ?>/reverse?lat=<?php echo $latestPositionLatitude; ?>&lon=<?php echo $latestPositionLongitude; ?>&format=json').done(function(response) {
+              $.getJSON('/data/data.php?module=geocoding&command=getLocalTime&id=<?php echo $station->id; ?>&lat=<?php echo $latestPositionLatitude; ?>&lon=<?php echo $latestPositionLongitude; ?>&cc=' + response.address.country_code).done(function(response) {
                 var lt = moment.utc(new Date()).utcOffset(response.data.offset/60)
                 $("#position-timezone").text(response.data.tz + ' (GMT '+lt.format('Z')+')');
                 $("#station-localtime").text(lt.format('L LTS'));
