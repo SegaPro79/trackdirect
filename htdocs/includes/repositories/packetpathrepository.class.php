@@ -67,82 +67,8 @@ class PacketPathRepository extends ModelRepository
         if ($minTimestamp == null || !isInt($minTimestamp)) {
             $minTimestamp = time() - (60*60*24*10); // Default to 10 days
         }
-        $sql = 'select stats.station_id,
-                       stats.number_of_packets,
-                       stats.latest_timestamp,
-                       stats.longest_distance,
-                       (
-                           select pp.latitude
-                           from packet_path pp
-                           where pp.sending_station_id = ?
-                             and pp.station_id = stats.station_id
-                             and pp.number = 0
-                             and pp.timestamp > ?
-                           order by pp.timestamp desc, pp.id desc
-                           limit 1
-                       ) latest_latitude,
-                       (
-                           select pp.longitude
-                           from packet_path pp
-                           where pp.sending_station_id = ?
-                             and pp.station_id = stats.station_id
-                             and pp.number = 0
-                             and pp.timestamp > ?
-                           order by pp.timestamp desc, pp.id desc
-                           limit 1
-                       ) latest_longitude,
-                       (
-                           select p.comment
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_comment,
-                       (
-                           select p.timestamp
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_comment_timestamp,
-                       (
-                           select p.comment
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.packet_type_id = 10
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_status,
-                       (
-                           select p.timestamp
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.packet_type_id = 10
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_status_timestamp
-                from (
-                    select station_id,
-                           count(*) number_of_packets,
-                           max(timestamp) latest_timestamp,
-                           max(distance) longest_distance
-                    from packet_path
-                    where sending_station_id = ?
-                      and timestamp > ?
-                      and number = 0
-                      and station_id != sending_station_id
-                    group by station_id
-                ) stats
-                order by stats.latest_timestamp desc';
-        $args = [$stationId, $minTimestamp, $stationId, $minTimestamp, $stationId, $minTimestamp];
+        $sql = 'select station_id, count(*) number_of_packets, max(timestamp) latest_timestamp, max(distance) longest_distance from packet_path where sending_station_id = ? and timestamp > ? and number = 0 and station_id != sending_station_id group by station_id order by max(timestamp) desc';
+        $args = [$stationId, $minTimestamp];
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepareAndExec($sql, $args);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -163,85 +89,131 @@ class PacketPathRepository extends ModelRepository
         if ($minTimestamp == null || !isInt($minTimestamp)) {
             $minTimestamp = time() - (60*60*24*10); // Default to 10 days
         }
-        $sql = 'select stats.station_id,
-                       stats.number_of_packets,
-                       stats.latest_timestamp,
-                       stats.longest_distance,
-                       (
-                           select pp.sending_latitude
-                           from packet_path pp
-                           where pp.station_id = ?
-                             and pp.sending_station_id = stats.station_id
-                             and pp.number = 0
-                             and pp.timestamp > ?
-                           order by pp.timestamp desc, pp.id desc
-                           limit 1
-                       ) latest_latitude,
-                       (
-                           select pp.sending_longitude
-                           from packet_path pp
-                           where pp.station_id = ?
-                             and pp.sending_station_id = stats.station_id
-                             and pp.number = 0
-                             and pp.timestamp > ?
-                           order by pp.timestamp desc, pp.id desc
-                           limit 1
-                       ) latest_longitude,
-                       (
-                           select p.comment
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_comment,
-                       (
-                           select p.timestamp
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_comment_timestamp,
-                       (
-                           select p.comment
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.packet_type_id = 10
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_status,
-                       (
-                           select p.timestamp
-                           from packet p
-                           where p.station_id = stats.station_id
-                             and p.packet_type_id = 10
-                             and p.comment is not null
-                             and length(trim(p.comment)) > 0
-                           order by p.timestamp desc, p.id desc
-                           limit 1
-                       ) latest_status_timestamp
-                from (
-                    select sending_station_id station_id,
-                           count(*) number_of_packets,
-                           max(timestamp) latest_timestamp,
-                           max(distance) longest_distance
-                    from packet_path
-                    where station_id = ?
-                      and timestamp > ?
-                      and number = 0
-                      and station_id != sending_station_id
-                    group by sending_station_id
-                ) stats
-                order by stats.latest_timestamp desc';
-        $args = [$stationId, $minTimestamp, $stationId, $minTimestamp, $stationId, $minTimestamp];
+        $sql = 'select sending_station_id station_id, count(*) number_of_packets, max(timestamp) latest_timestamp, max(distance) longest_distance from packet_path where station_id = ? and timestamp > ? and number = 0 and station_id != sending_station_id group by sending_station_id order by max(timestamp) desc';
+        $args = [$stationId, $minTimestamp];
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepareAndExec($sql, $args);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get latest coordinate data for stations that received packets from the specified station
+     *
+     * @param  int   $stationId
+     * @param  array $receiverStationIds
+     * @param  int   $minTimestamp
+     * @return array
+     */
+    public function getLatestCoordinatesForSenderStation($stationId, array $receiverStationIds, $minTimestamp = null)
+    {
+        if (!isInt($stationId) || count($receiverStationIds) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($receiverStationIds as $receiverStationId) {
+            if (isInt($receiverStationId)) {
+                $stationIds[] = (int)$receiverStationId;
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+        $args = array_merge([$stationId], $stationIds, [$minTimestamp]);
+
+        $sql = 'select pp.station_id,
+                       pp.latitude,
+                       pp.longitude
+                from packet_path pp
+                where pp.sending_station_id = ?
+                  and pp.station_id in (' . $placeholders . ')
+                  and pp.number = 0
+                  and pp.timestamp > ?
+                order by pp.station_id, pp.timestamp desc, pp.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $coordinates = [];
+        foreach ($rows as $row) {
+            $relatedStationId = (int)$row['station_id'];
+            if (!isset($coordinates[$relatedStationId])) {
+                $coordinates[$relatedStationId] = [
+                    'latitude' => $row['latitude'] !== null ? (float)$row['latitude'] : null,
+                    'longitude' => $row['longitude'] !== null ? (float)$row['longitude'] : null,
+                ];
+            }
+        }
+
+        return $coordinates;
+    }
+
+    /**
+     * Get latest coordinate data for stations that sent packets to the specified station
+     *
+     * @param  int   $stationId
+     * @param  array $senderStationIds
+     * @param  int   $minTimestamp
+     * @return array
+     */
+    public function getLatestCoordinatesForReceiverStation($stationId, array $senderStationIds, $minTimestamp = null)
+    {
+        if (!isInt($stationId) || count($senderStationIds) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($senderStationIds as $senderStationId) {
+            if (isInt($senderStationId)) {
+                $stationIds[] = (int)$senderStationId;
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+        $args = array_merge([$stationId], $stationIds, [$minTimestamp]);
+
+        $sql = 'select pp.sending_station_id station_id,
+                       pp.sending_latitude latitude,
+                       pp.sending_longitude longitude
+                from packet_path pp
+                where pp.station_id = ?
+                  and pp.sending_station_id in (' . $placeholders . ')
+                  and pp.number = 0
+                  and pp.timestamp > ?
+                order by pp.sending_station_id, pp.timestamp desc, pp.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $coordinates = [];
+        foreach ($rows as $row) {
+            $relatedStationId = (int)$row['station_id'];
+            if (!isset($coordinates[$relatedStationId])) {
+                $coordinates[$relatedStationId] = [
+                    'latitude' => $row['latitude'] !== null ? (float)$row['latitude'] : null,
+                    'longitude' => $row['longitude'] !== null ? (float)$row['longitude'] : null,
+                ];
+            }
+        }
+
+        return $coordinates;
     }
 
     /**
