@@ -188,6 +188,122 @@ class PacketRepository extends ModelRepository
     }
 
     /**
+     * Get the latest packet with a free-form comment for each station id
+     *
+     * @param  array $stationIds
+     * @return array
+     */
+    public function getLatestCommentPacketsForStationIds(array $stationIds)
+    {
+        $stationIds = $this->sanitizeStationIdList($stationIds);
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+
+        $sql = 'select p.station_id,
+                       p.timestamp,
+                       p.comment,
+                       p.id
+                from packet p
+                    inner join (
+                        select station_id,
+                               max(timestamp) latest_timestamp
+                        from packet
+                        where station_id in (' . $placeholders . ')
+                          and comment is not null
+                          and length(trim(comment)) > 0
+                        group by station_id
+                    ) latest on latest.station_id = p.station_id and latest.latest_timestamp = p.timestamp
+                where p.comment is not null
+                  and length(trim(p.comment)) > 0
+                order by p.station_id asc, p.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $stationIds);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $latestPackets = [];
+        foreach ($rows as $row) {
+            $stationId = (int)$row['station_id'];
+            if (!isset($latestPackets[$stationId])) {
+                $latestPackets[$stationId] = [
+                    'comment' => $row['comment'],
+                    'timestamp' => is_numeric($row['timestamp']) ? (int)$row['timestamp'] : null,
+                ];
+            }
+        }
+
+        return $latestPackets;
+    }
+
+    /**
+     * Get the latest status packet for each station id
+     *
+     * @param  array $stationIds
+     * @return array
+     */
+    public function getLatestStatusPacketsForStationIds(array $stationIds)
+    {
+        $stationIds = $this->sanitizeStationIdList($stationIds);
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+
+        $sql = 'select p.station_id,
+                       p.timestamp,
+                       p.comment,
+                       p.id
+                from packet p
+                    inner join (
+                        select station_id,
+                               max(timestamp) latest_timestamp
+                        from packet
+                        where station_id in (' . $placeholders . ')
+                          and packet_type_id = 10
+                          and comment is not null
+                          and length(trim(comment)) > 0
+                        group by station_id
+                    ) latest on latest.station_id = p.station_id and latest.latest_timestamp = p.timestamp
+                where p.packet_type_id = 10
+                  and p.comment is not null
+                  and length(trim(p.comment)) > 0
+                order by p.station_id asc, p.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $stationIds);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $latestPackets = [];
+        foreach ($rows as $row) {
+            $stationId = (int)$row['station_id'];
+            if (!isset($latestPackets[$stationId])) {
+                $latestPackets[$stationId] = [
+                    'comment' => $row['comment'],
+                    'timestamp' => is_numeric($row['timestamp']) ? (int)$row['timestamp'] : null,
+                ];
+            }
+        }
+
+        return $latestPackets;
+    }
+
+    private function sanitizeStationIdList(array $stationIds)
+    {
+        $sanitizedIds = [];
+        foreach ($stationIds as $stationId) {
+            if (isInt($stationId)) {
+                $sanitizedIds[] = (int)$stationId;
+            }
+        }
+
+        return array_values(array_unique($sanitizedIds));
+    }
+
+    /**
      * Get object list with raw by sender station id for the latest 24 hours
      *
      * @param  int $stationId

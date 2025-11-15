@@ -6,6 +6,53 @@
   } else {
     $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null);
   }
+
+  if (!function_exists('formatOverviewTimestamp')) {
+      function formatOverviewTimestamp($timestamp, string $format = 'd.m.Y H:i:sP'): string
+      {
+          if ($timestamp === null || $timestamp === '') {
+              return '';
+          }
+
+          if (!is_numeric($timestamp)) {
+              return '';
+          }
+
+          $timestamp = (int) $timestamp;
+
+          try {
+              $date = new DateTimeImmutable('@' . $timestamp);
+              $date = $date->setTimezone(new DateTimeZone(date_default_timezone_get()));
+
+              return $date->format($format);
+          } catch (\Throwable $exception) {
+              return '';
+          }
+      }
+
+      function overviewTimestampAttributes($timestamp, bool $relative = false, ?string $format = null): string
+      {
+          if ($timestamp === null || $timestamp === '') {
+              return '';
+          }
+
+          if (!is_numeric($timestamp)) {
+              return '';
+          }
+
+          $attributes = ' data-timestamp="' . (int) $timestamp . '"';
+
+          if ($relative) {
+              $attributes .= ' data-relative="from-now"';
+          }
+
+          if ($format !== null && $format !== '') {
+              $attributes .= ' data-format="' . htmlspecialchars($format, ENT_QUOTES) . '"';
+          }
+
+          return $attributes;
+      }
+  }
 ?>
 <?php if ($station->isExistingObject()) : ?>
     <title><?php echo $station->name; ?> Overview</title>
@@ -137,7 +184,7 @@
 
                 <div>
                     <div class="overview-content-summary-hr-indent">Receive Time:</div>
-                    <div title="Timestamp of the latest packet" id="latest-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent">
+                    <div title="Timestamp of the latest packet" id="latest-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent"<?php echo overviewTimestampAttributes($station->latestPacketTimestamp, false, 'L LTSZ'); ?>>
                         <?php echo $station->latestPacketTimestamp; ?>
                     </div>
                 </div>
@@ -145,7 +192,7 @@
 
                 <div>
                     <div class="overview-content-summary-hr-indent">Age:</div>
-                    <div title="Age of the latest packet" id="latest-timestamp-age" class="overview-content-summary-cell-time overview-content-summary-indent">
+                    <div title="Age of the latest packet" id="latest-timestamp-age" class="overview-content-summary-cell-time overview-content-summary-indent"<?php echo overviewTimestampAttributes($station->latestPacketTimestamp, true); ?>>
                         <?php echo $station->latestPacketTimestamp; ?>
                     </div>
                 </div>
@@ -202,7 +249,7 @@
 
                 <div>
                     <div class="overview-content-summary-hr">Latest Weather:</div>
-                    <div id="weather-timestamp" class="overview-content-summary-cell-weather-time" title="Latest received weather">
+                    <div id="weather-timestamp" class="overview-content-summary-cell-weather-time" title="Latest received weather"<?php echo overviewTimestampAttributes($station->latestWeatherPacketTimestamp, false, 'L LTSZ'); ?>>
                         <?php echo $station->latestWeatherPacketTimestamp; ?>
                     </div>
                 </div>
@@ -223,7 +270,7 @@
 
                 <div>
                     <div class="overview-content-summary-hr">Latest Telemetry:</div>
-                    <div id="telemetry-timestamp" class="overview-content-summary-cell-telemetry-time" title="Latest received telemetry">
+                    <div id="telemetry-timestamp" class="overview-content-summary-cell-telemetry-time" title="Latest received telemetry"<?php echo overviewTimestampAttributes($station->latestTelemetryPacketTimestamp, false, 'L LTSZ'); ?>>
                         <?php echo $station->latestTelemetryPacketTimestamp; ?>
                     </div>
                 </div>
@@ -264,13 +311,15 @@
 
                 <div>
                     <div class="overview-content-summary-hr-indent">Receive Time:</div>
-                    <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time">
-                        <?php if ($station->latestPacketId == $station->latestConfirmedPacketId && $station->latestPacketTimestamp == $station->latestConfirmedPacketTimestamp) : ?>
+                    <?php if ($station->latestPacketId == $station->latestConfirmedPacketId && $station->latestPacketTimestamp == $station->latestConfirmedPacketTimestamp) : ?>
+                        <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time">
                             (Received in latest packet)
-                        <?php else : ?>
+                        </div>
+                    <?php else : ?>
+                        <div id="position-timestamp" class="overview-content-summary-cell-time overview-content-summary-indent" title="Latest position receive time"<?php echo overviewTimestampAttributes($station->latestConfirmedPacketTimestamp, false, 'L LTSZ'); ?>>
                             <?php echo $station->latestConfirmedPacketTimestamp; ?>
-                        <?php endif; ?>
-                    </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div>
                     <div class="overview-content-summary-hr">&nbsp;</div>
@@ -416,7 +465,7 @@
                 <div class="overview-content-divider"></div>
                 <div>
                     <div class="overview-content-summary-hr">Latest bulletin:</div>
-                    <div class="overview-content-packet-frequency" title="Latest bulletin"><span><?php echo $stationLatestBulletinPacket[0]->to_call; ?>: <?php echo $stationLatestBulletinPacket[0]->comment; ?></span> (<span id="bulletin-timestamp"><?php echo $stationLatestBulletinPacket[0]->timestamp; ?></span>)</div>
+                    <div class="overview-content-packet-frequency" title="Latest bulletin"><span><?php echo $stationLatestBulletinPacket[0]->to_call; ?>: <?php echo $stationLatestBulletinPacket[0]->comment; ?></span> (<span id="bulletin-timestamp"<?php echo overviewTimestampAttributes((int)$stationLatestBulletinPacket[0]->timestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp((int)$stationLatestBulletinPacket[0]->timestamp)); ?></span>)</div>
                 </div>
             <?php endif; ?>
             <br/><span style="float:left;width:400px;"><img src="/public/images/dotColor3.svg" style="height:24px;vertical-align:middle;" id="live-img" /><span id="live-status" style="vertical-align:middle;">Waiting for connection...</span></span>
@@ -424,6 +473,7 @@
         </div>
 
         <div class="overview-content-symbol" id ="overview-content-symbol-<?php echo $station->id; ?>">
+            <div class="overview-content-summary-hr">Latest symbol</div>
             <img src="<?php echo $station->getIconFilePath(150, 150); ?>" alt="Latest symbol" title="<?php echo $station->getLatestSymbolDescription(); ?>"/>
             <?php if ($station->latestPacketId !== null) : ?>
                 <br/>
@@ -472,6 +522,17 @@
 
             <!-- Close by stations -->
             <?php $closeByStations = StationRepository::getInstance()->getCloseByObjectListByStationId($station->id, 15); ?>
+            <?php
+                $communicationDays = 10;
+                if (!isAllowedToShowOlderData()) {
+                    $communicationDays = 10;
+                }
+                $communicationMinTimestamp = time() - (60 * 60 * 24 * $communicationDays);
+                $packetPathRepository = PacketPathRepository::getInstance();
+
+                $stationsHeardBy = $packetPathRepository->getSenderPacketPathSatisticsWithDetails($station->id, $communicationMinTimestamp, 10);
+                $stationsHeard = $packetPathRepository->getReceiverPacketPathSatisticsWithDetails($station->id, $communicationMinTimestamp, 10);
+            ?>
             <?php if (count($closeByStations) > 1) : ?>
                 <div>
                     <div class="overview-content-summary-hr">Nearby stations/objects:</div>
@@ -489,7 +550,11 @@
                                 <img src="<?php echo $closeByStation->getIconFilePath(22, 22); ?>" alt="Symbol"/>&nbsp;
                                 <span>
                                     <a class="tdlink" href="/views/overview.php?id=<?php echo $closeByStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($closeByStation->name) ?></a>
-                                    <span class="nts"><?php echo $closeByStation->latestPacketTimestamp; ?></span>
+                                    <?php if ($closeByStation->latestPacketTimestamp !== null) : ?>
+                                        <span class="nts"<?php echo overviewTimestampAttributes($closeByStation->latestPacketTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($closeByStation->latestPacketTimestamp)); ?></span>
+                                    <?php else : ?>
+                                        <span class="nts">&nbsp;</span>
+                                    <?php endif; ?>
                                     <span>
                                         <?php if (isImperialUnitUser()) : ?>
                                             <?php if (convertMeterToYard($closeByStation->getDistance($station->latestConfirmedLatitude, $station->latestConfirmedLongitude)) < 1000) : ?>
@@ -514,9 +579,197 @@
                 </div>
                 <div class="overview-content-divider"></div>
             <?php endif; ?>
+
+            <?php $stationRepository = StationRepository::getInstance(); ?>
+            <?php if (count($stationsHeardBy) > 0) : ?>
+                <div>
+                    <div class="overview-content-summary-hr">Stations that heard <?php echo htmlspecialchars($station->name); ?> (latest <?php echo $communicationDays; ?> day(s)):</div>
+                    <div class="overview-content-station-list" title="Stations that recently heard <?php echo htmlspecialchars($station->name); ?>" style="width:100%">
+                        <table class="overview-stations-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Station</th>
+                                    <th scope="col">Last heard</th>
+                                    <th scope="col">Last position</th>
+                                    <th scope="col">Comment</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Packet count</th>
+                                    <th scope="col">Longest distance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($stationsHeardBy as $stats) : ?>
+                                    <?php $otherStation = $stationRepository->getObjectById($stats['station_id']); ?>
+                                    <?php if ($otherStation->isExistingObject()) : ?>
+                                        <?php
+                                            $distanceLabel = '&nbsp;';
+                                            if ($stats['longest_distance'] !== null) {
+                                                if (isImperialUnitUser()) {
+                                                    $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
+                                                } else {
+                                                    $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
+                                                }
+                                            }
+                                            $positionLatitude = $stats['latitude'] ?? null;
+                                            $positionLongitude = $stats['longitude'] ?? null;
+                                            if ($positionLatitude === null || $positionLongitude === null) {
+                                                $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                                $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            }
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = (isset($stats['latest_comment_timestamp']) && is_numeric($stats['latest_comment_timestamp'])) ? (int)$stats['latest_comment_timestamp'] : null;
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = (isset($stats['latest_status_timestamp']) && is_numeric($stats['latest_status_timestamp'])) ? (int)$stats['latest_status_timestamp'] : null;
+                                            $latestTimestamp = (isset($stats['latest_timestamp']) && is_numeric($stats['latest_timestamp'])) ? (int)$stats['latest_timestamp'] : null;
+                                        ?>
+                                        <tr>
+                                            <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
+                                            <td class="overview-stations-name">
+                                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
+                                            </td>
+                                            <td>
+                                                <?php if ($latestTimestamp !== null) : ?>
+                                                    <span class="nts"<?php echo overviewTimestampAttributes($latestTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestTimestamp)); ?></span>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($positionLatitude !== null && $positionLongitude !== null) : ?>
+                                                    <?php echo round($positionLatitude, 5); ?>, <?php echo round($positionLongitude, 5); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($latestComment !== '' && $latestComment !== null) : ?>
+                                                    <?php if ($latestCommentTimestamp !== null) : ?>
+                                                        <span class="nts"<?php echo overviewTimestampAttributes($latestCommentTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestCommentTimestamp)); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestComment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($latestStatus !== '' && $latestStatus !== null) : ?>
+                                                    <?php if ($latestStatusTimestamp !== null) : ?>
+                                                        <span class="nts"<?php echo overviewTimestampAttributes($latestStatusTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestStatusTimestamp)); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestStatus)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo $stats['number_of_packets']; ?></td>
+                                            <td><?php echo $distanceLabel; ?></td>
+                                        </tr>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="overview-content-divider"></div>
+            <?php endif; ?>
+
+            <?php if (count($stationsHeard) > 0) : ?>
+                <div>
+                    <div class="overview-content-summary-hr">Stations heard by <?php echo htmlspecialchars($station->name); ?> (latest <?php echo $communicationDays; ?> day(s)):</div>
+                    <div class="overview-content-station-list" title="Stations that <?php echo htmlspecialchars($station->name); ?> recently heard" style="width:100%">
+                        <table class="overview-stations-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Station</th>
+                                    <th scope="col">Last heard</th>
+                                    <th scope="col">Last position</th>
+                                    <th scope="col">Comment</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Packet count</th>
+                                    <th scope="col">Longest distance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($stationsHeard as $stats) : ?>
+                                    <?php $otherStation = $stationRepository->getObjectById($stats['station_id']); ?>
+                                    <?php if ($otherStation->isExistingObject()) : ?>
+                                        <?php
+                                            $distanceLabel = '&nbsp;';
+                                            if ($stats['longest_distance'] !== null) {
+                                                if (isImperialUnitUser()) {
+                                                    $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
+                                                } else {
+                                                    $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
+                                                }
+                                            }
+                                            $positionLatitude = $stats['latitude'] ?? null;
+                                            $positionLongitude = $stats['longitude'] ?? null;
+                                            if ($positionLatitude === null || $positionLongitude === null) {
+                                                $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                                $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            }
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = (isset($stats['latest_comment_timestamp']) && is_numeric($stats['latest_comment_timestamp'])) ? (int)$stats['latest_comment_timestamp'] : null;
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = (isset($stats['latest_status_timestamp']) && is_numeric($stats['latest_status_timestamp'])) ? (int)$stats['latest_status_timestamp'] : null;
+                                            $latestTimestamp = (isset($stats['latest_timestamp']) && is_numeric($stats['latest_timestamp'])) ? (int)$stats['latest_timestamp'] : null;
+                                        ?>
+                                        <tr>
+                                            <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
+                                            <td class="overview-stations-name">
+                                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
+                                            </td>
+                                            <td>
+                                                <?php if ($latestTimestamp !== null) : ?>
+                                                    <span class="nts"<?php echo overviewTimestampAttributes($latestTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestTimestamp)); ?></span>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($positionLatitude !== null && $positionLongitude !== null) : ?>
+                                                    <?php echo round($positionLatitude, 5); ?>, <?php echo round($positionLongitude, 5); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($latestComment !== '' && $latestComment !== null) : ?>
+                                                    <?php if ($latestCommentTimestamp !== null) : ?>
+                                                        <span class="nts"<?php echo overviewTimestampAttributes($latestCommentTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestCommentTimestamp)); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestComment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($latestStatus !== '' && $latestStatus !== null) : ?>
+                                                    <?php if ($latestStatusTimestamp !== null) : ?>
+                                                        <span class="nts"<?php echo overviewTimestampAttributes($latestStatusTimestamp, false, 'L LTSZ'); ?>><?php echo htmlspecialchars(formatOverviewTimestamp($latestStatusTimestamp)); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php echo nl2br(htmlentities($latestStatus)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo $stats['number_of_packets']; ?></td>
+                                            <td><?php echo $distanceLabel; ?></td>
+                                        </tr>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="overview-content-divider"></div>
+            <?php endif; ?>
+
         </div>
 
-        <?php if (count($relatedStations) > 1 || count($closeByStations) > 1) : ?>
+        <?php if (count($relatedStations) > 1 || count($closeByStations) > 1 || count($stationsHeardBy) > 0 || count($stationsHeard) > 0) : ?>
             <div class="horizontal-line">&nbsp;</div>
         <?php endif; ?>
 
@@ -584,15 +837,23 @@
                 }
             });
 
-            $('#latest-timestamp, #comment-timestamp, #status-timestamp, #beacon-timestamp, #position-timestamp, #weather-timestamp, #telemetry-timestamp, #bulletin-timestamp, .nts').each(function() {
-                if ($(this).html().trim() != '' && !isNaN($(this).html().trim())) {
-                    $(this).html(moment(new Date(1000 * $(this).html())).format('L LTSZ'));
+            $('[data-timestamp]').each(function() {
+                var $element = $(this);
+                var timestampValue = parseInt($element.attr('data-timestamp'), 10);
+
+                if (isNaN(timestampValue)) {
+                    return;
+                }
+
+                var momentInstance = moment(new Date(timestampValue * 1000));
+
+                if ($element.attr('data-relative') === 'from-now') {
+                    $element.text(momentInstance.locale('en').fromNow());
+                } else {
+                    var displayFormat = $element.attr('data-format') || 'L LTSZ';
+                    $element.text(momentInstance.locale(locale).format(displayFormat));
                 }
             });
-
-            if ($('#latest-timestamp-age').length && $('#latest-timestamp-age').html().trim() != '' && !isNaN($('#latest-timestamp-age').html().trim())) {
-                $('#latest-timestamp-age').html(moment(new Date(1000 * $('#latest-timestamp-age').html())).locale('en').fromNow());
-            }
 
             if (window.trackdirect) {
                 <?php if ($station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>

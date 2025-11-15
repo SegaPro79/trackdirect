@@ -97,6 +97,312 @@ class PacketPathRepository extends ModelRepository
     }
 
     /**
+     * Get packet path statistics (with metadata) for stations that received packets from the specified station
+     *
+     * @param  int $stationId
+     * @param  int $minTimestamp
+     * @param  int $limit
+     * @return array
+     */
+    public function getSenderPacketPathSatisticsWithDetails($stationId, $minTimestamp = null, $limit = 10)
+    {
+        if (!isInt($stationId)) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        if (!isInt($limit) || $limit <= 0) {
+            $limit = 10;
+        }
+
+        $limit = min($limit, 50);
+
+        $sql = 'select station_id,
+                       count(*) number_of_packets,
+                       max(timestamp) latest_timestamp,
+                       max(distance) longest_distance
+                from packet_path
+                where sending_station_id = ?
+                  and timestamp > ?
+                  and number = 0
+                  and station_id != sending_station_id
+                group by station_id
+                order by max(timestamp) desc
+                limit ' . $limit;
+
+        $args = [$stationId, $minTimestamp];
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $statsRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($statsRows) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($statsRows as $row) {
+            if (isset($row['station_id']) && isInt($row['station_id'])) {
+                $stationIds[] = (int)$row['station_id'];
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $packetRepository = PacketRepository::getInstance();
+        $latestComments = $packetRepository->getLatestCommentPacketsForStationIds($stationIds);
+        $latestStatuses = $packetRepository->getLatestStatusPacketsForStationIds($stationIds);
+        $latestCoordinates = $this->getLatestCoordinatesForSenderStation($stationId, $stationIds, $minTimestamp);
+
+        $rows = [];
+        foreach ($statsRows as $row) {
+            $stationIdValue = isset($row['station_id']) && isInt($row['station_id']) ? (int)$row['station_id'] : null;
+            if ($stationIdValue === null) {
+                continue;
+            }
+
+            $rowData = $row;
+
+            if (isset($latestComments[$stationIdValue])) {
+                $rowData['latest_comment'] = $latestComments[$stationIdValue]['comment'];
+                $rowData['latest_comment_timestamp'] = $latestComments[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestStatuses[$stationIdValue])) {
+                $rowData['latest_status'] = $latestStatuses[$stationIdValue]['comment'];
+                $rowData['latest_status_timestamp'] = $latestStatuses[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestCoordinates[$stationIdValue])) {
+                $rowData['latitude'] = $latestCoordinates[$stationIdValue]['latitude'];
+                $rowData['longitude'] = $latestCoordinates[$stationIdValue]['longitude'];
+            }
+
+            $rows[] = $rowData;
+        }
+
+        return $this->formatCommunicationStats($rows);
+    }
+
+    /**
+     * Get packet path statistics (with metadata) for stations that sent packets to the specified station
+     *
+     * @param  int $stationId
+     * @param  int $minTimestamp
+     * @param  int $limit
+     * @return array
+     */
+    public function getReceiverPacketPathSatisticsWithDetails($stationId, $minTimestamp = null, $limit = 10)
+    {
+        if (!isInt($stationId)) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        if (!isInt($limit) || $limit <= 0) {
+            $limit = 10;
+        }
+
+        $limit = min($limit, 50);
+
+        $sql = 'select sending_station_id station_id,
+                       count(*) number_of_packets,
+                       max(timestamp) latest_timestamp,
+                       max(distance) longest_distance
+                from packet_path
+                where station_id = ?
+                  and timestamp > ?
+                  and number = 0
+                  and station_id != sending_station_id
+                group by sending_station_id
+                order by max(timestamp) desc
+                limit ' . $limit;
+
+        $args = [$stationId, $minTimestamp];
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $statsRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($statsRows) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($statsRows as $row) {
+            if (isset($row['station_id']) && isInt($row['station_id'])) {
+                $stationIds[] = (int)$row['station_id'];
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        $packetRepository = PacketRepository::getInstance();
+        $latestComments = $packetRepository->getLatestCommentPacketsForStationIds($stationIds);
+        $latestStatuses = $packetRepository->getLatestStatusPacketsForStationIds($stationIds);
+        $latestCoordinates = $this->getLatestCoordinatesForReceiverStation($stationId, $stationIds, $minTimestamp);
+
+        $rows = [];
+        foreach ($statsRows as $row) {
+            $stationIdValue = isset($row['station_id']) && isInt($row['station_id']) ? (int)$row['station_id'] : null;
+            if ($stationIdValue === null) {
+                continue;
+            }
+
+            $rowData = $row;
+
+            if (isset($latestComments[$stationIdValue])) {
+                $rowData['latest_comment'] = $latestComments[$stationIdValue]['comment'];
+                $rowData['latest_comment_timestamp'] = $latestComments[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestStatuses[$stationIdValue])) {
+                $rowData['latest_status'] = $latestStatuses[$stationIdValue]['comment'];
+                $rowData['latest_status_timestamp'] = $latestStatuses[$stationIdValue]['timestamp'];
+            }
+
+            if (isset($latestCoordinates[$stationIdValue])) {
+                $rowData['latitude'] = $latestCoordinates[$stationIdValue]['latitude'];
+                $rowData['longitude'] = $latestCoordinates[$stationIdValue]['longitude'];
+            }
+
+            $rows[] = $rowData;
+        }
+
+        return $this->formatCommunicationStats($rows);
+    }
+
+    /**
+     * Get latest coordinate data for stations that received packets from the specified station
+     *
+     * @param  int   $stationId
+     * @param  array $receiverStationIds
+     * @param  int   $minTimestamp
+     * @return array
+     */
+    public function getLatestCoordinatesForSenderStation($stationId, array $receiverStationIds, $minTimestamp = null)
+    {
+        if (!isInt($stationId) || count($receiverStationIds) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($receiverStationIds as $receiverStationId) {
+            if (isInt($receiverStationId)) {
+                $stationIds[] = (int)$receiverStationId;
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+        $args = array_merge([$stationId], $stationIds, [$minTimestamp]);
+
+        $sql = 'select pp.station_id,
+                       pp.latitude,
+                       pp.longitude
+                from packet_path pp
+                where pp.sending_station_id = ?
+                  and pp.station_id in (' . $placeholders . ')
+                  and pp.number = 0
+                  and pp.timestamp > ?
+                order by pp.station_id, pp.timestamp desc, pp.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $coordinates = [];
+        foreach ($rows as $row) {
+            $relatedStationId = (int)$row['station_id'];
+            if (!isset($coordinates[$relatedStationId])) {
+                $coordinates[$relatedStationId] = [
+                    'latitude' => $row['latitude'] !== null ? (float)$row['latitude'] : null,
+                    'longitude' => $row['longitude'] !== null ? (float)$row['longitude'] : null,
+                ];
+            }
+        }
+
+        return $coordinates;
+    }
+
+    /**
+     * Get latest coordinate data for stations that sent packets to the specified station
+     *
+     * @param  int   $stationId
+     * @param  array $senderStationIds
+     * @param  int   $minTimestamp
+     * @return array
+     */
+    public function getLatestCoordinatesForReceiverStation($stationId, array $senderStationIds, $minTimestamp = null)
+    {
+        if (!isInt($stationId) || count($senderStationIds) === 0) {
+            return [];
+        }
+
+        $stationIds = [];
+        foreach ($senderStationIds as $senderStationId) {
+            if (isInt($senderStationId)) {
+                $stationIds[] = (int)$senderStationId;
+            }
+        }
+
+        if (count($stationIds) === 0) {
+            return [];
+        }
+
+        if ($minTimestamp === null || !isInt($minTimestamp)) {
+            $minTimestamp = time() - (60 * 60 * 24 * 10);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($stationIds), '?'));
+        $args = array_merge([$stationId], $stationIds, [$minTimestamp]);
+
+        $sql = 'select pp.sending_station_id station_id,
+                       pp.sending_latitude latitude,
+                       pp.sending_longitude longitude
+                from packet_path pp
+                where pp.station_id = ?
+                  and pp.sending_station_id in (' . $placeholders . ')
+                  and pp.number = 0
+                  and pp.timestamp > ?
+                order by pp.sending_station_id, pp.timestamp desc, pp.id desc';
+
+        $pdo = PDOConnection::getInstance();
+        $stmt = $pdo->prepareAndExec($sql, $args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $coordinates = [];
+        foreach ($rows as $row) {
+            $relatedStationId = (int)$row['station_id'];
+            if (!isset($coordinates[$relatedStationId])) {
+                $coordinates[$relatedStationId] = [
+                    'latitude' => $row['latitude'] !== null ? (float)$row['latitude'] : null,
+                    'longitude' => $row['longitude'] !== null ? (float)$row['longitude'] : null,
+                ];
+            }
+        }
+
+        return $coordinates;
+    }
+
+    /**
      * Get latest data list by receiving station id
      *
      * @param  int     $stationId
@@ -161,5 +467,49 @@ class PacketPathRepository extends ModelRepository
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepareAndExec($sql, $arg);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function formatCommunicationStats(array $rows)
+    {
+        $formatted = [];
+
+        foreach ($rows as $row) {
+            $stationId = isset($row['station_id']) ? (int)$row['station_id'] : null;
+
+            if ($stationId === null) {
+                continue;
+            }
+
+            $latestComment = null;
+            if (isset($row['latest_comment'])) {
+                $commentValue = trim((string)$row['latest_comment']);
+                if ($commentValue !== '') {
+                    $latestComment = $commentValue;
+                }
+            }
+
+            $latestStatus = null;
+            if (isset($row['latest_status'])) {
+                $statusValue = trim((string)$row['latest_status']);
+                if ($statusValue !== '') {
+                    $latestStatus = $statusValue;
+                }
+            }
+
+            $formatted[] = [
+                'station_id' => $stationId,
+                'number_of_packets' => isset($row['number_of_packets']) ? (int)$row['number_of_packets'] : 0,
+                'latest_timestamp' => isset($row['latest_timestamp']) && is_numeric($row['latest_timestamp']) ? (int)$row['latest_timestamp'] : null,
+                'longest_distance' => isset($row['longest_distance']) && is_numeric($row['longest_distance']) ? (float)$row['longest_distance'] : null,
+                'latest_comment' => $latestComment,
+                'latest_comment_timestamp' => isset($row['latest_comment_timestamp']) && is_numeric($row['latest_comment_timestamp']) ? (int)$row['latest_comment_timestamp'] : null,
+                'latest_status' => $latestStatus,
+                'latest_status_timestamp' => isset($row['latest_status_timestamp']) && is_numeric($row['latest_status_timestamp']) ? (int)$row['latest_status_timestamp'] : null,
+                'latitude' => isset($row['latitude']) && $row['latitude'] !== null ? (float)$row['latitude'] : null,
+                'longitude' => isset($row['longitude']) && $row['longitude'] !== null ? (float)$row['longitude'] : null,
+            ];
+        }
+
+        return $formatted;
     }
 }
