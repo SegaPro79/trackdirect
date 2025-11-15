@@ -479,21 +479,9 @@
                 }
                 $communicationMinTimestamp = time() - (60 * 60 * 24 * $communicationDays);
                 $packetPathRepository = PacketPathRepository::getInstance();
-                $packetRepository = PacketRepository::getInstance();
 
-                $stationsHeardBy = $packetPathRepository->getSenderPacketPathSatistics($station->id, $communicationMinTimestamp);
-                $stationsHeardBy = array_slice($stationsHeardBy, 0, 10);
-                $stationsHeard = $packetPathRepository->getReceiverPacketPathSatistics($station->id, $communicationMinTimestamp);
-                $stationsHeard = array_slice($stationsHeard, 0, 10);
-
-                $stationsHeardByIds = array_map('intval', array_column($stationsHeardBy, 'station_id'));
-                $stationsHeardIds = array_map('intval', array_column($stationsHeard, 'station_id'));
-                $relatedStationIds = array_values(array_unique(array_merge($stationsHeardByIds, $stationsHeardIds)));
-
-                $latestComments = count($relatedStationIds) > 0 ? $packetRepository->getLatestCommentPacketsForStationIds($relatedStationIds) : [];
-                $latestStatuses = count($relatedStationIds) > 0 ? $packetRepository->getLatestStatusPacketsForStationIds($relatedStationIds) : [];
-                $latestSenderCoordinates = count($stationsHeardByIds) > 0 ? $packetPathRepository->getLatestCoordinatesForSenderStation($station->id, $stationsHeardByIds, $communicationMinTimestamp) : [];
-                $latestReceiverCoordinates = count($stationsHeardIds) > 0 ? $packetPathRepository->getLatestCoordinatesForReceiverStation($station->id, $stationsHeardIds, $communicationMinTimestamp) : [];
+                $stationsHeardBy = $packetPathRepository->getSenderPacketPathSatisticsWithDetails($station->id, $communicationMinTimestamp, 10);
+                $stationsHeard = $packetPathRepository->getReceiverPacketPathSatisticsWithDetails($station->id, $communicationMinTimestamp, 10);
             ?>
             <?php if (count($closeByStations) > 1) : ?>
                 <div>
@@ -569,22 +557,16 @@
                                                     $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
                                                 }
                                             }
-                                            $positionLatitude = null;
-                                            $positionLongitude = null;
-                                            if (isset($latestSenderCoordinates[$otherStation->id])) {
-                                                $positionLatitude = $latestSenderCoordinates[$otherStation->id]['latitude'];
-                                                $positionLongitude = $latestSenderCoordinates[$otherStation->id]['longitude'];
-                                            }
+                                            $positionLatitude = $stats['latitude'] ?? null;
+                                            $positionLongitude = $stats['longitude'] ?? null;
                                             if ($positionLatitude === null || $positionLongitude === null) {
                                                 $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
                                                 $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
                                             }
-                                            $commentPacket = $latestComments[$otherStation->id] ?? null;
-                                            $statusPacket = $latestStatuses[$otherStation->id] ?? null;
-                                            $latestComment = $commentPacket['comment'] ?? '';
-                                            $latestCommentTimestamp = $commentPacket['timestamp'] ?? null;
-                                            $latestStatus = $statusPacket['comment'] ?? '';
-                                            $latestStatusTimestamp = $statusPacket['timestamp'] ?? null;
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = $stats['latest_comment_timestamp'] ?? null;
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = $stats['latest_status_timestamp'] ?? null;
                                         ?>
                                         <tr>
                                             <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
@@ -661,22 +643,16 @@
                                                     $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
                                                 }
                                             }
-                                            $positionLatitude = null;
-                                            $positionLongitude = null;
-                                            if (isset($latestReceiverCoordinates[$otherStation->id])) {
-                                                $positionLatitude = $latestReceiverCoordinates[$otherStation->id]['latitude'];
-                                                $positionLongitude = $latestReceiverCoordinates[$otherStation->id]['longitude'];
-                                            }
+                                            $positionLatitude = $stats['latitude'] ?? null;
+                                            $positionLongitude = $stats['longitude'] ?? null;
                                             if ($positionLatitude === null || $positionLongitude === null) {
                                                 $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
                                                 $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
                                             }
-                                            $commentPacket = $latestComments[$otherStation->id] ?? null;
-                                            $statusPacket = $latestStatuses[$otherStation->id] ?? null;
-                                            $latestComment = $commentPacket['comment'] ?? '';
-                                            $latestCommentTimestamp = $commentPacket['timestamp'] ?? null;
-                                            $latestStatus = $statusPacket['comment'] ?? '';
-                                            $latestStatusTimestamp = $statusPacket['timestamp'] ?? null;
+                                            $latestComment = $stats['latest_comment'] ?? '';
+                                            $latestCommentTimestamp = $stats['latest_comment_timestamp'] ?? null;
+                                            $latestStatus = $stats['latest_status'] ?? '';
+                                            $latestStatusTimestamp = $stats['latest_status_timestamp'] ?? null;
                                         ?>
                                         <tr>
                                             <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
