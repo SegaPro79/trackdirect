@@ -13,13 +13,8 @@ class AprscStatus
      * Fetch and summarize APRSC status metrics.
      *
      * @return array{
-     *     users_online: ?int,
-     *     pkts_tx: ?int,
-     *     pkts_rx: ?int,
-     *     pkts_rtx: ?int,
-     *     tx_active: bool,
-     *     rx_active: bool,
-     *     connected: bool
+     *     connected: bool,
+     *     users_online: ?int
      * }
      */
     public static function getSummary(): array
@@ -41,11 +36,6 @@ class AprscStatus
         $summary = [
             'connected' => false,
             'users_online' => null,
-            'pkts_tx' => null,
-            'pkts_rx' => null,
-            'pkts_rtx' => null,
-            'tx_active' => false,
-            'rx_active' => false,
         ];
 
         $response = self::fetchStatus(self::STATUS_URL);
@@ -68,13 +58,8 @@ class AprscStatus
     /**
      * @param array<string, mixed> $data
      * @return array{
-     *     users_online: ?int,
-     *     pkts_tx: ?int,
-     *     pkts_rx: ?int,
-     *     pkts_rtx: ?int,
-     *     tx_active: bool,
-     *     rx_active: bool,
-     *     connected: bool
+     *     connected: bool,
+     *     users_online: ?int
      * }
      */
     private static function normalizeSummary(array $data): array
@@ -82,11 +67,6 @@ class AprscStatus
         return [
             'connected' => !empty($data['connected']),
             'users_online' => array_key_exists('users_online', $data) ? self::castValue($data['users_online']) : null,
-            'pkts_tx' => array_key_exists('pkts_tx', $data) ? self::castValue($data['pkts_tx']) : null,
-            'pkts_rx' => array_key_exists('pkts_rx', $data) ? self::castValue($data['pkts_rx']) : null,
-            'pkts_rtx' => array_key_exists('pkts_rtx', $data) ? self::castValue($data['pkts_rtx']) : null,
-            'tx_active' => !empty($data['tx_active']),
-            'rx_active' => !empty($data['rx_active']),
         ];
     }
 
@@ -147,7 +127,7 @@ class AprscStatus
     }
 
     /**
-     * @return array<string, int|null|bool>
+     * @return array<string, int|bool|null>
      */
     private static function parseJson(string $payload): array
     {
@@ -156,67 +136,42 @@ class AprscStatus
             return [];
         }
 
-        $usersOnline = self::extractUsersOnline($decoded);
-
-        $result = [
-            'users_online' => $usersOnline,
-        ];
-
-        if ($usersOnline !== null) {
-            $result['connected'] = true;
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     */
-    private static function extractUsersOnline(array $data): ?int
-    {
-        $paths = [
-            ['clients', 'total'],
-            ['clients', 'connected'],
-            ['status', 'clients', 'total'],
-            ['listeners', 'total'],
-        ];
-
-        foreach ($paths as $path) {
-            $value = self::resolvePath($data, $path);
-            $numeric = self::castValue($value);
-            if ($numeric !== null) {
-                return $numeric;
-            }
-        }
-
-        if (isset($data['clients']) && is_array($data['clients'])) {
-            $sum = 0;
-            $found = false;
-            foreach ($data['clients'] as $clientData) {
-                if (!is_array($clientData)) {
+        $usersOnline = null;
+        if (isset($decoded['listeners']) && is_array($decoded['listeners'])) {
+            foreach ($decoded['listeners'] as $listener) {
+                if (!is_array($listener)) {
                     continue;
                 }
 
-                foreach (['connected', 'inuse', 'current', 'count', 'clients', 'value', 'total'] as $key) {
-                    if (!array_key_exists($key, $clientData)) {
-                        continue;
-                    }
+                if (array_key_exists('clients', $listener)) {
+                    $candidate = $listener['clients'];
+                    if (is_array($candidate)) {
+                        foreach (['total', 'connected', 'count', 'value'] as $key) {
+                            if (!array_key_exists($key, $candidate)) {
+                                continue;
+                            }
 
-                    $numeric = self::castValue($clientData[$key]);
-                    if ($numeric !== null) {
-                        $sum += $numeric;
-                        $found = true;
-                        break;
+                            $numeric = self::castValue($candidate[$key]);
+                            if ($numeric !== null) {
+                                $usersOnline = $numeric;
+                                break 2;
+                            }
+                        }
+                    } else {
+                        $numeric = self::castValue($candidate);
+                        if ($numeric !== null) {
+                            $usersOnline = $numeric;
+                            break;
+                        }
                     }
                 }
             }
-
-            if ($found) {
-                return $sum;
-            }
         }
 
-        return null;
+        return [
+            'connected' => true,
+            'users_online' => $usersOnline,
+        ];
     }
 
     private static function writeCache(string $cacheFile, int $timestamp, array $summary): void
@@ -265,21 +220,4 @@ class AprscStatus
         return null;
     }
 
-    /**
-     * @param array<string, mixed>|mixed $data
-     * @param array<int, string> $path
-     * @return mixed
-     */
-    private static function resolvePath($data, array $path)
-    {
-        $node = $data;
-        foreach ($path as $segment) {
-            if (!is_array($node) || !array_key_exists($segment, $node)) {
-                return null;
-            }
-            $node = $node[$segment];
-        }
-
-        return $node;
-    }
 }

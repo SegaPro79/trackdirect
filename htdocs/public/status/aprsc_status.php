@@ -7,12 +7,7 @@ $status = AprscStatus::getSummary();
 
 $response = [
     'connected' => !empty($status['connected']),
-    'users_online' => $status['users_online'],
-    'pkts_tx' => $status['pkts_tx'],
-    'pkts_rx' => $status['pkts_rx'],
-    'pkts_rtx' => $status['pkts_rtx'],
-    'tx_active' => (bool) ($status['tx_active'] ?? false),
-    'rx_active' => (bool) ($status['rx_active'] ?? false),
+    'users_online' => $status['users_online'] ?? null,
 ];
 
 echo json_encode($response);

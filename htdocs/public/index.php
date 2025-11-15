@@ -7,33 +7,10 @@ $formatStatusValue = static function (?int $value): string {
 $usersOnlineValue = $aprscStatus['users_online'] ?? null;
 $usersOnlineDisplay = $formatStatusValue($usersOnlineValue);
 $aprscConnected = !empty($aprscStatus['connected']);
-$txActive = !empty($aprscStatus['tx_active']);
-$rxActive = !empty($aprscStatus['rx_active']);
-
-$resolveLampState = static function (bool $connected, bool $hasActivity): string {
-    if (!$connected) {
-        return 'lamp-off';
-    }
-
-    if ($hasActivity) {
-        return 'lamp-activity';
-    }
-
-    return 'lamp-connected';
-};
-
-$txLampClass = $resolveLampState($aprscConnected, $txActive);
-$rxLampClass = $resolveLampState($aprscConnected, $rxActive);
-$lampStateFromClass = static function (string $class): string {
-    if (strpos($class, 'lamp-') === 0) {
-        return substr($class, 5);
-    }
-
-    return 'off';
-};
-
-$txIndicatorState = $lampStateFromClass($txLampClass);
-$rxIndicatorState = $lampStateFromClass($rxLampClass);
+$txLampClass = $aprscConnected ? 'lamp-connected' : 'lamp-off';
+$rxLampClass = $aprscConnected ? 'lamp-connected' : 'lamp-off';
+$txIndicatorState = $aprscConnected ? 'connected' : 'off';
+$rxIndicatorState = $aprscConnected ? 'connected' : 'off';
 ?>
 
 <!DOCTYPE html>
@@ -447,8 +424,6 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
             data-refresh-interval="10000"
             data-users-online="<?php echo $usersOnlineValue !== null ? htmlspecialchars((string) $usersOnlineValue, ENT_QUOTES, 'UTF-8') : ''; ?>"
             data-connected="<?php echo $aprscConnected ? '1' : '0'; ?>"
-            data-tx-activity="<?php echo $txActive ? '1' : '0'; ?>"
-            data-rx-activity="<?php echo $rxActive ? '1' : '0'; ?>"
         >
             <div class="site-footer__left">
                 <span class="site-footer__label">Users Online:</span>
@@ -456,7 +431,7 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
             </div>
             <div class="site-footer__right">
                 <div class="site-footer__traffic" role="group" aria-label="APRSC traffic state">
-                    <span class="traffic-indicator" id="footer-tx-indicator" data-state="<?php echo htmlspecialchars($txIndicatorState, ENT_QUOTES, 'UTF-8'); ?>" title="TX <?php echo $aprscConnected ? ($txActive ? 'activity detected' : 'connected') : 'offline'; ?>">
+                    <span class="traffic-indicator" id="footer-tx-indicator" data-state="<?php echo htmlspecialchars($txIndicatorState, ENT_QUOTES, 'UTF-8'); ?>" title="TX <?php echo $aprscConnected ? 'connected' : 'offline'; ?>">
                         <span class="traffic-indicator__label">TX</span>
                         <span class="traffic-indicator__lamp <?php echo htmlspecialchars($txLampClass, ENT_QUOTES, 'UTF-8'); ?>" id="footer-tx-lamp" aria-hidden="true"></span>
                     </span>
