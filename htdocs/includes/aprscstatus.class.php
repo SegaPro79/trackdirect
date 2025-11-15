@@ -28,8 +28,9 @@ class AprscStatus
                 is_array($cachedPayload)
                 && isset($cachedPayload['timestamp'])
                 && ($now - (int) $cachedPayload['timestamp']) < self::CACHE_TTL
+                && isset($cachedPayload['data'])
             ) {
-                return self::normalizeSummary($cachedPayload['data'] ?? []);
+                return self::coerceSummary($cachedPayload['data']);
             }
         }
 
@@ -41,33 +42,16 @@ class AprscStatus
         $response = self::fetchStatus(self::STATUS_URL);
         if ($response !== null && $response['ok']) {
             $parsed = self::parseJson($response['body']);
-            if (!empty($parsed)) {
-                $summary = array_merge($summary, $parsed);
-            }
+            $summary = array_merge($summary, $parsed);
         }
 
-        $summary = self::normalizeSummary($summary);
+        $summary = self::coerceSummary($summary);
 
         if ($summary['connected']) {
             self::writeCache($cacheFile, $now, $summary);
         }
 
         return $summary;
-    }
-
-    /**
-     * @param array<string, mixed> $data
-     * @return array{
-     *     connected: bool,
-     *     users_online: ?int
-     * }
-     */
-    private static function normalizeSummary(array $data): array
-    {
-        return [
-            'connected' => !empty($data['connected']),
-            'users_online' => array_key_exists('users_online', $data) ? self::castValue($data['users_online']) : null,
-        ];
     }
 
     private static function getCacheFilePath(): string
@@ -127,49 +111,56 @@ class AprscStatus
     }
 
     /**
-     * @return array<string, int|bool|null>
+     * @return array{connected: bool, users_online: ?int}
      */
     private static function parseJson(string $payload): array
     {
         $decoded = json_decode($payload, true);
         if (!is_array($decoded)) {
-            return [];
+            return [
+                'connected' => false,
+                'users_online' => null,
+            ];
         }
 
         $usersOnline = null;
-        if (isset($decoded['listeners']) && is_array($decoded['listeners'])) {
-            foreach ($decoded['listeners'] as $listener) {
-                if (!is_array($listener)) {
-                    continue;
-                }
 
-                if (array_key_exists('clients', $listener)) {
-                    $candidate = $listener['clients'];
-                    if (is_array($candidate)) {
-                        foreach (['total', 'connected', 'count', 'value'] as $key) {
-                            if (!array_key_exists($key, $candidate)) {
-                                continue;
-                            }
-
-                            $numeric = self::castValue($candidate[$key]);
-                            if ($numeric !== null) {
-                                $usersOnline = $numeric;
-                                break 2;
-                            }
-                        }
-                    } else {
-                        $numeric = self::castValue($candidate);
-                        if ($numeric !== null) {
-                            $usersOnline = $numeric;
-                            break;
-                        }
-                    }
-                }
-            }
+        if (isset($decoded['totals']['clients']) && is_numeric($decoded['totals']['clients'])) {
+            $usersOnline = (int) $decoded['totals']['clients'];
+        } elseif (
+            isset($decoded['listeners'])
+            && is_array($decoded['listeners'])
+            && isset($decoded['listeners'][0])
+            && is_array($decoded['listeners'][0])
+            && isset($decoded['listeners'][0]['clients'])
+            && is_numeric($decoded['listeners'][0]['clients'])
+        ) {
+            $usersOnline = (int) $decoded['listeners'][0]['clients'];
         }
 
         return [
             'connected' => true,
+            'users_online' => $usersOnline,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{connected: bool, users_online: ?int}
+     */
+    private static function coerceSummary(array $data): array
+    {
+        $connected = !empty($data['connected']);
+        $usersOnline = null;
+        if (array_key_exists('users_online', $data)) {
+            $value = $data['users_online'];
+            if (is_numeric($value)) {
+                $usersOnline = (int) $value;
+            }
+        }
+
+        return [
+            'connected' => $connected,
             'users_online' => $usersOnline,
         ];
     }
@@ -180,44 +171,6 @@ class AprscStatus
             'timestamp' => $timestamp,
             'data' => $summary,
         ]));
-    }
-
-    /**
-     * @param mixed $value
-     */
-    private static function castValue($value): ?int
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_int($value)) {
-            return $value;
-        }
-
-        if (is_float($value)) {
-            return (int) round($value);
-        }
-
-        if (is_string($value)) {
-            $trimmed = trim($value);
-            if ($trimmed === '' || !preg_match('/[0-9]/', $trimmed)) {
-                return null;
-            }
-
-            $normalized = str_replace([",", "\xc2\xa0", ' '], ['', '', ''], $trimmed);
-            if (!is_numeric($normalized)) {
-                $normalized = preg_replace('/[^0-9.-]/', '', $normalized ?? '');
-            }
-
-            if ($normalized === '' || !is_numeric($normalized)) {
-                return null;
-            }
-
-            return (int) round((float) $normalized);
-        }
-
-        return null;
     }
 
 }
