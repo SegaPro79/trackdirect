@@ -45,6 +45,305 @@ jQuery(document).ready(function ($) {
   for (x=0; x<24; x++) {
     $("#timetravel-time").append(new Option((x < 10 ? '0':'')+x+':00', (x < 10 ? '0':'')+x+':00'));
   }
+
+  (function initAprscFooterStatus() {
+    var $footer = $('.site-footer');
+    if ($footer.length === 0) {
+      return;
+    }
+
+    var endpoint = $footer.data('aprscEndpoint');
+    if (!endpoint) {
+      return;
+    }
+
+    var $usersValue = $('#footer-users-online');
+    var $txIndicator = $('#footer-tx-indicator');
+    var $txLamp = $('#footer-tx-lamp');
+    var $rxIndicator = $('#footer-rx-indicator');
+    var $rxLamp = $('#footer-rx-lamp');
+
+    if ($usersValue.length === 0 || $txLamp.length === 0 || $rxLamp.length === 0) {
+      return;
+    }
+
+    var refreshInterval = parseInt($footer.data('refreshInterval'), 10);
+    if (!refreshInterval || refreshInterval < 3000) {
+      refreshInterval = 10000;
+    }
+
+    var ACTIVITY_DURATION = 1500;
+    var LAMP_STATES = ['off', 'connected', 'activity'];
+    var activityTimers = { tx: null, rx: null };
+    var state = {
+      websocketConnected: false,
+      txActivity: false,
+      rxActivity: false
+    };
+    var statusConnected = false;
+
+    function toInt(value) {
+      if (value === null || typeof value === 'undefined' || value === '') {
+        return null;
+      }
+      var parsed = parseInt(value, 10);
+      return isNaN(parsed) ? null : parsed;
+    }
+
+    function toBool(value) {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      if (typeof value === 'number') {
+        return value !== 0;
+      }
+      if (typeof value === 'string') {
+        var trimmed = value.trim().toLowerCase();
+        if (trimmed === '' || trimmed === '0' || trimmed === 'false' || trimmed === 'no') {
+          return false;
+        }
+        return true;
+      }
+      return !!value;
+    }
+
+    function clearActivityTimer(type) {
+      if (activityTimers[type]) {
+        clearTimeout(activityTimers[type]);
+        activityTimers[type] = null;
+      }
+    }
+
+    function setLampState($indicator, $lamp, stateName, label) {
+      var normalized = LAMP_STATES.indexOf(stateName) !== -1 ? stateName : 'off';
+      if ($lamp && $lamp.length) {
+        $lamp.removeClass('lamp-off lamp-connected lamp-activity').addClass('lamp-' + normalized);
+      }
+      if ($indicator && $indicator.length) {
+        $indicator.attr('data-state', normalized);
+        if (label) {
+          var descriptor = normalized === 'activity' ? 'activity' : (normalized === 'connected' ? 'connected' : 'offline');
+          $indicator.attr('title', label + ' ' + descriptor);
+        }
+      }
+    }
+
+    function setUsersValue(value) {
+      if (value === null) {
+        $usersValue.text('N/A');
+        return;
+      }
+
+      var numericValue = Number(value);
+      if (!isNaN(numericValue) && isFinite(numericValue)) {
+        try {
+          $usersValue.text(numericValue.toLocaleString());
+          return;
+        } catch (error) {
+          // fall through to raw output
+        }
+      }
+
+      $usersValue.text(value);
+    }
+
+    function setWebsocketConnection(isConnected) {
+      var connected = !!isConnected;
+      if (state.websocketConnected === connected && connected) {
+        if (!state.txActivity) {
+          setLampState($txIndicator, $txLamp, 'connected', 'TX');
+        }
+        if (!state.rxActivity) {
+          setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+        }
+        return;
+      }
+
+      state.websocketConnected = connected;
+
+      if (!state.websocketConnected) {
+        clearActivityTimer('tx');
+        clearActivityTimer('rx');
+        state.txActivity = false;
+        state.rxActivity = false;
+        setLampState($txIndicator, $txLamp, 'off', 'TX');
+        setLampState($rxIndicator, $rxLamp, 'off', 'RX');
+        return;
+      }
+
+      if (!state.txActivity) {
+        setLampState($txIndicator, $txLamp, 'connected', 'TX');
+      }
+      if (!state.rxActivity) {
+        setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+      }
+    }
+
+    function markTxActivity() {
+      if (!state.websocketConnected) {
+        return;
+      }
+
+      state.txActivity = true;
+      setLampState($txIndicator, $txLamp, 'activity', 'TX');
+      clearActivityTimer('tx');
+      activityTimers.tx = window.setTimeout(function () {
+        activityTimers.tx = null;
+        state.txActivity = false;
+        if (state.websocketConnected) {
+          setLampState($txIndicator, $txLamp, 'connected', 'TX');
+        } else {
+          setLampState($txIndicator, $txLamp, 'off', 'TX');
+        }
+      }, ACTIVITY_DURATION);
+    }
+
+    function markRxActivity() {
+      if (!state.websocketConnected) {
+        return;
+      }
+
+      state.rxActivity = true;
+      setLampState($rxIndicator, $rxLamp, 'activity', 'RX');
+      clearActivityTimer('rx');
+      activityTimers.rx = window.setTimeout(function () {
+        activityTimers.rx = null;
+        state.rxActivity = false;
+        if (state.websocketConnected) {
+          setLampState($rxIndicator, $rxLamp, 'connected', 'RX');
+        } else {
+          setLampState($rxIndicator, $rxLamp, 'off', 'RX');
+        }
+      }, ACTIVITY_DURATION);
+    }
+
+    function updateWebsocketConnection(websocket) {
+      if (!websocket) {
+        setWebsocketConnection(false);
+        return;
+      }
+
+      var connected = false;
+      if (typeof websocket.getState === 'function') {
+        var stateValue = websocket.getState();
+        if (websocket.State && typeof websocket.State === 'object') {
+          var states = websocket.State;
+          var connectedStates = [
+            states.CONNECTED,
+            states.LISTENING_APRSIS,
+            states.LOADING,
+            states.LOADING_DONE,
+            states.CONNECTING_APRSIS,
+            states.IDLE,
+          ];
+
+          if (connectedStates.indexOf(stateValue) !== -1) {
+            connected = true;
+          }
+        } else if (stateValue === 1) {
+          connected = true;
+        }
+      }
+
+      if (!connected && websocket._instance && typeof websocket._instance.readyState !== 'undefined') {
+        connected = websocket._instance.readyState === 1;
+      }
+
+      setWebsocketConnection(connected);
+    }
+
+    function applyStatus(status) {
+      if (typeof status !== 'object' || status === null) {
+        statusConnected = false;
+        setUsersValue(null);
+        return;
+      }
+
+      statusConnected = toBool(status.connected);
+
+      if (!statusConnected) {
+        setUsersValue(null);
+        return;
+      }
+
+      var users = toInt(status.users_online);
+      setUsersValue(users);
+    }
+
+    statusConnected = toBool($footer.data('connected'));
+    if (statusConnected) {
+      setUsersValue(toInt($footer.data('usersOnline')));
+    } else {
+      setUsersValue(null);
+    }
+
+    setWebsocketConnection(false);
+
+    $(document).on('trackdirect:rx-activity', markRxActivity);
+    $(document).on('trackdirect:tx-activity', markTxActivity);
+
+    var websocketHooked = false;
+    if (typeof trackdirect !== 'undefined' && trackdirect && typeof trackdirect.addListener === 'function') {
+      trackdirect.addListener('trackdirect-init-done', function () {
+        if (websocketHooked) {
+          return;
+        }
+
+        if (trackdirect._websocket && typeof trackdirect._websocket.addListener === 'function') {
+          websocketHooked = true;
+          var websocket = trackdirect._websocket;
+
+          websocket.addListener('aprs-packet', function () {
+            markRxActivity();
+          });
+
+          if (typeof websocket.addListener === 'function') {
+            websocket.addListener('state-change', function () {
+              updateWebsocketConnection(websocket);
+            });
+          }
+
+          updateWebsocketConnection(websocket);
+
+          if (!websocket._aprsFooterSendWrapped && typeof websocket.send === 'function') {
+            websocket._aprsFooterSendWrapped = true;
+            var originalSend = websocket.send.bind(websocket);
+            websocket.send = function (data) {
+              markTxActivity();
+              return originalSend(data);
+            };
+          }
+        }
+      });
+
+      trackdirect.addListener('map-created', function () {
+        if (!trackdirect._map || typeof trackdirect._map.addTdListener !== 'function') {
+          return;
+        }
+
+        var handleClientActivity = function () {
+          markTxActivity();
+        };
+
+        trackdirect._map.addTdListener('moving', handleClientActivity);
+        trackdirect._map.addTdListener('change', handleClientActivity);
+      }, true);
+    }
+
+    function pollAprscStatus() {
+      $.getJSON(endpoint, { _: Date.now() })
+        .done(function (data) {
+          applyStatus(data);
+        })
+        .fail(function () {
+          statusConnected = false;
+          setUsersValue(null);
+        });
+    }
+
+    pollAprscStatus();
+    setInterval(pollAprscStatus, refreshInterval);
+  })();
 });
 
 function wxGaugeParams(id) {
@@ -418,16 +717,22 @@ jQuery(document).ready(function ($) {
 // Switch between regular topnav and topnav adapted for mobile
 function toggleTopNav() {
   var x = document.getElementById("tdTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  if (!x) {
+    return;
+  }
+
+  if (x.classList.contains("responsive")) {
+    x.classList.remove("responsive");
   } else {
-    x.className = "topnav";
+    x.classList.add("responsive");
   }
 }
 
 // If an external website shows map in iframe, hide all menu's
-if (!inIframe()) {
+if (inIframe()) {
   $("#tdTopnav").hide();
+} else {
+  $("#tdTopnav").show();
 }
 
 // Set correct time length option to active

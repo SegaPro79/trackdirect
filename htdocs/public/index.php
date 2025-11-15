@@ -1,4 +1,17 @@
 <?php require "../includes/bootstrap.php"; ?>
+<?php
+$aprscStatus = AprscStatus::getSummary();
+$formatStatusValue = static function (?int $value): string {
+    return $value !== null ? number_format($value) : 'N/A';
+};
+$usersOnlineValue = $aprscStatus['users_online'] ?? null;
+$usersOnlineDisplay = $formatStatusValue($usersOnlineValue);
+$aprscConnected = !empty($aprscStatus['connected']);
+$txLampClass = $aprscConnected ? 'lamp-connected' : 'lamp-off';
+$rxLampClass = $aprscConnected ? 'lamp-connected' : 'lamp-off';
+$txIndicatorState = $aprscConnected ? 'connected' : 'off';
+$rxIndicatorState = $aprscConnected ? 'connected' : 'off';
+?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -169,7 +182,8 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
 
                        trackdirect.addListener("trackdirect-init-done", function () {
                          trackdirect._websocket.addListener("server-timestamp-response", function (data) {
-                           $('#svrclock').text(moment(new Date(1000 * data.timestamp)).format('LTS'));
+                           var formattedTime = moment(new Date(1000 * data.timestamp)).format('LTS');
+                           $('#header-svrclock').text(formattedTime);
                            liveData.init();
                          });
                         });
@@ -184,7 +198,20 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
         </script>
     </head>
     <body>
-        <div class="topnav" id="tdTopnav">
+        <div class="app-shell">
+            <header class="site-header">
+                <div class="site-header__inner">
+                    <div class="site-header__brand">
+                        <a href="/" class="site-header__brand-link">APRSdirect</a>
+                        <span class="site-header__brand-subtitle">Live APRS &amp; LoRa Tracking</span>
+                    </div>
+                    <div class="site-header__actions">
+                        <span class="site-header__status-label">Server Time:</span>
+                        <span class="site-header__status-value" id="header-svrclock">00:00:00</span>
+                    </div>
+                </div>
+            </header>
+            <nav class="topnav site-nav" id="tdTopnav">
             <a  style="background-color: #af7a4c; color: white;"
                 href=""
                 onclick="
@@ -358,26 +385,21 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
             <div class="dropdown">
               <form method="get" id="hdr-search-form" action="">
                   <input type="hidden" name="seconds" id="hdr-search-form-seconds" value="0" />
-                  <input type="text" style="width: 130px;padding-left:10px;margin-top:8px;margin-left:10px;height:20px;text-transform:uppercase;" id="hdr-search-form-q" autocomplete="off" spellcheck="false" autocorrect="off" name="q" placeholder="Callsign search..." title="Search for a station/vehicle here!">
-                  <input type="submit" value="Go" style="margin-top:8px;line-height:0px;padding-left:6px;padding-right:6px" />
+                  <input type="text" id="hdr-search-form-q" autocomplete="off" spellcheck="false" autocorrect="off" name="q" placeholder="Callsign search..." title="Search for a station/vehicle here!">
+                  <input type="submit" value="Go" />
               </form>
             </div>
 
-            <a class="tdlink" id="svrclock" style="float:right">00:00:00</a>
-
             <a href="javascript:void(0);" class="icon" onclick="toggleTopNav()">&#9776;</a>
 
-        </div>
+        </nav>
 
-        <div id="map-container"></div>
+        <main class="site-main">
+            <div class="map-wrapper">
+                <div id="map-container"></div>
+            </div>
 
-        <div id="footer">&copy; 2022-2026 <?php echo getWebsiteConfig('owner_name'); ?>.   Based on <a target="_blank" href="https://www.aprsdirect.com">APRS Track Direct</a>
-<br>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8260211101428270"
-     crossorigin="anonymous"></script>
-</div>
-
-        <div id="right-container">
+            <div id="right-container">
             <div id="right-container-info">
                 <div id="status-container"></div>
                 <div id="cordinates-container"></div>
@@ -393,6 +415,37 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
                 <div id="right-container-timetravel-content"></div>
                 <a href="#" onclick="trackdirect.setTimeTravelTimestamp(0); $('#right-container-timetravel').hide(); return false;">reset</a>
             </div>
+            </div>
+        </main>
+
+        <footer
+            class="site-footer"
+            data-aprsc-endpoint="/status/aprsc_status.php"
+            data-refresh-interval="10000"
+            data-users-online="<?php echo $usersOnlineValue !== null ? htmlspecialchars((string) $usersOnlineValue, ENT_QUOTES, 'UTF-8') : ''; ?>"
+            data-connected="<?php echo $aprscConnected ? '1' : '0'; ?>"
+        >
+            <div class="site-footer__left">
+                <span class="site-footer__label">Users Online:</span>
+                <span class="site-footer__value" id="footer-users-online"><?php echo $usersOnlineDisplay; ?></span>
+            </div>
+            <div class="site-footer__right">
+                <div class="site-footer__traffic" role="group" aria-label="APRSC traffic state">
+                    <span class="traffic-indicator" id="footer-tx-indicator" data-state="<?php echo htmlspecialchars($txIndicatorState, ENT_QUOTES, 'UTF-8'); ?>" title="TX <?php echo $aprscConnected ? 'connected' : 'offline'; ?>">
+                        <span class="traffic-indicator__label">TX</span>
+                        <span class="traffic-indicator__lamp <?php echo htmlspecialchars($txLampClass, ENT_QUOTES, 'UTF-8'); ?>" id="footer-tx-lamp" aria-hidden="true"></span>
+                    </span>
+                    <span class="traffic-indicator" id="footer-rx-indicator" data-state="<?php echo htmlspecialchars($rxIndicatorState, ENT_QUOTES, 'UTF-8'); ?>" title="RX <?php echo $aprscConnected ? 'connected' : 'offline'; ?>">
+                        <span class="traffic-indicator__label">RX</span>
+                        <span class="traffic-indicator__lamp <?php echo htmlspecialchars($rxLampClass, ENT_QUOTES, 'UTF-8'); ?>" id="footer-rx-lamp" aria-hidden="true"></span>
+                    </span>
+                </div>
+            </div>
+        </footer>
+
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8260211101428270"
+     crossorigin="anonymous"></script>
+
         </div>
 
         <div id="td-modal" class="modal">
