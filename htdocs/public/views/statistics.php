@@ -5,7 +5,7 @@
     <?php
         $days = 10;
         if (!isAllowedToShowOlderData()) {
-            $days = 1;
+            $days = 10;
         }
     ?>
     <?php $senderStats = PacketPathRepository::getInstance()->getSenderPacketPathSatistics($station->id, time() - (60*60*24*$days)); ?>

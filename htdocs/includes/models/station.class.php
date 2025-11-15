@@ -147,8 +147,6 @@ class Station extends Model
                 return '<a target="_blank" rel="nofollow" href="http://www.aprs-is.net/">APRS-IS</a>';
             } elseif ($this->sourceId == 2) {
                 return '<a target="_blank" rel="nofollow" href="http://wxqa.com/">CWOP (Citizen Weather Observer Program)</a>';
-            } elseif ($this->sourceId == 3) {
-                return '<a target="_blank" rel="nofollow" href="http://www.cbaprs.de">CBAPRS (Citizen Band APRS)</a>';
             } elseif ($this->sourceId == 5) {
                 return '<a target="_blank" rel="nofollow" href="http://wiki.glidernet.org/">OGN (Open Glider Network)</a>';
             }
@@ -216,7 +214,7 @@ class Station extends Model
             $scaleStrValue = '-scale' . $scaleWidth . 'x' . $scaleHeight;
         }
 
-        return '/symbols/symbol-' . $symbolAsciiValue . '-' . $symbolTableAsciiValue . $scaleStrValue . '.svg';
+        return '/symbols/symbol-' . $symbolAsciiValue . '-' . $symbolTableAsciiValue . $scaleStrValue . '.png';
     }
 
     /**
@@ -243,12 +241,12 @@ class Station extends Model
             $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($records as $record) {
 
-                if (strlen($record['symbol']) >= 1 && strlen($record['symbol_table']) >= 1) {
+             if (!empty($record['symbol']) && !empty($record['symbol_table'])) {
                     $key = $record['symbol'] . ':' . $record['symbol_table'];
 
                     $symbolAsciiValue = ord(substr($record['symbol'], 0, 1));
                     $symbolTableAsciiValue = ord(substr($record['symbol_table'], 0, 1));
-                    $result[$key] = '/symbols/symbol-' . $symbolAsciiValue . '-' . $symbolTableAsciiValue . $scaleStrValue . '.svg';
+                    $result[$key] = '/symbols/symbol-' . $symbolAsciiValue . '-' . $symbolTableAsciiValue . $scaleStrValue . '.png';
                 }
             }
         }
@@ -299,25 +297,6 @@ class Station extends Model
         if (!empty($record) && $record['freq'] > 0) {
             $numberOfPackets = $record['c'];
             return $record['freq'];
-        } else {
-            return null;
-        }
-    }
-
-    /**
-     * Get total packets recorded for the station
-     *
-     * @return int
-     */
-    public function getTotalPackets()
-    {
-        $pdo = PDOConnection::getInstance();
-
-        $sql = 'select count(id) c from packet where station_id = ?';
-        $stmt = $pdo->prepareAndExec($sql, [$this->id]);
-        $record = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!empty($record) && $record['c'] > 0) {
-            return $record['c'];
         } else {
             return null;
         }

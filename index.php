@@ -1,4 +1,7 @@
 <?php require "../includes/bootstrap.php"; ?>
+<?php
+require __DIR__ . '/../../config/adsense.php';
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -87,19 +90,18 @@
                     options['isMobile'] = true;
                 }
 
-options['time']       = "<?= htmlspecialchars($_GET['time'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['center']     = "<?= htmlspecialchars($_GET['center'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['zoom']       = "<?= htmlspecialchars($_GET['zoom'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['timetravel'] = "<?= htmlspecialchars($_GET['timetravel'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['maptype']    = "<?= htmlspecialchars($_GET['maptype'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['mid']        = "<?= htmlspecialchars($_GET['mid'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
+                options['time'] =       "<?php echo $_GET['time'] ?? '' ?>";        // How many minutes of history to show
+                options['center'] =     "<?php echo $_GET['center'] ?? '' ?>";      // Position to center on (for example "46.52108,14.63379")
+                options['zoom'] =       "<?php echo $_GET['zoom'] ?? '' ?>";        // Zoom level
+                options['timetravel'] = "<?php echo $_GET['timetravel'] ?? '' ?>";  // Unix timestamp to travel to
+                options['maptype'] =    "<?php echo $_GET['maptype'] ?? '' ?>";     // May be "roadmap", "terrain" or "satellite"
+                options['mid'] =        "<?php echo $_GET['mid'] ?? '' ?>";         // Render map from "Google My Maps" (requires https)
 
-options['filters'] = {};
-options['filters']['sid']       = "<?= htmlspecialchars($_GET['sid'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['filters']['sname']     = "<?= htmlspecialchars($_GET['sname'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['filters']['sidlist']   = "<?= htmlspecialchars($_GET['sidlist'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? '', ENT_QUOTES, 'UTF-8') ?>";
-
+                options['filters'] = {};
+                options['filters']['sid'] = "<?php echo $_GET['sid'] ?? '' ?>";         // Station id to filter on
+                options['filters']['sname'] = "<?php echo $_GET['sname'] ?? '' ?>";     // Station name to filter on
+                options['filters']['sidlist'] = "<?php echo $_GET['sidlist'] ?? '' ?>";     // Station id list to filter on (colon separated)
+                options['filters']['snamelist'] = "<?php echo $_GET['snamelist'] ?? '' ?>"; // Station name list to filter on (colon separated)
 
                 // Tell jslib which html element to use to show connection status and mouse cordinates
                 options['statusContainerElementId'] = 'status-container';
@@ -366,8 +368,12 @@ options['filters']['snamelist'] = "<?= htmlspecialchars($_GET['snamelist'] ?? ''
 
         <div id="footer">&copy; 2022-2026 <?php echo getWebsiteConfig('owner_name'); ?>.   Based on <a target="_blank" href="https://www.aprsdirect.com">APRS Track Direct</a>
 <br>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8260211101428270"
-     crossorigin="anonymous"></script>
+<script>
+  (adsbygoogle = window.adsbygoogle || []).push({
+       google_ad_client: "<?php echo htmlspecialchars($ADSENSE_CLIENT, ENT_QUOTES); ?>",
+       enable_page_level_ads: true
+  });
+</script>
 </div>
 
         <div id="right-container">

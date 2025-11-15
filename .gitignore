@@ -10,6 +10,7 @@ htdocs/public/heatmaps/heatmap.*.png
 # Custom config files
 config/*
 !config/trackdirect.ini
+config/adsense.php
 
 ogndevices
 
@@ -18,3 +19,5 @@ db
 # virtualenvs
 /venv
 /virtualenv
+config/
+backup/

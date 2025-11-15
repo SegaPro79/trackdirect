@@ -2,13 +2,12 @@
 
 <?php
     $stations = [];
-    $seconds = 60*60*24;
+    $seconds = 60 * 60 * 24;
     $page = $_GET['page'] ?? 1;
     $rows = 50;
     $offset = ($page - 1) * $rows;
 
-    $source = $_GET['source'] ?? 0;
-    $stations = StationRepository::getInstance()->getObjectList($seconds, $rows, $offset, $source);
+    $stations = StationRepository::getInstance()->getObjectList($seconds, $rows, $offset);
     $count = StationRepository::getInstance()->getNumberOfStations($seconds);
 
     $pages = ceil($count / $rows);
@@ -18,26 +17,16 @@
 <div class="modal-inner-content" style="padding-bottom: 30px;">
     <?php if (count($stations) > 0) : ?>
         <p>
-            <span>
-                <form id="filtersource" style="float:right;">
-                  Filter by:
-                    <input type="radio" name="source" value="0" <?php if ($source == 0) echo 'checked="checked"'; ?> /> All
-                    <input type="radio" name="source" value="1" <?php if ($source == 1) echo 'checked="checked"'; ?> /> APRS-IS
-                    <input type="radio" name="source" value="2" <?php if ($source == 2) echo 'checked="checked"'; ?> /> CWOP
-                    <input type="radio" name="source" value="5" <?php if ($source == 5) echo 'checked="checked"'; ?> /> OGN
-                    <input type="radio" name="source" value="3" <?php if ($source == 3) echo 'checked="checked"'; ?> /> CBAPRS
-                </form>
-            </span>
             <?php echo $count; ?> station(s) have been heard in the last 24 hours.
         </p>
 
         <?php if ($pages > 1): ?>
             <div class="pagination">
-              <a class="tdlink" href="/views/latest.php?q=<?php echo ($_GET['q'] ?? "") ?>&seconds=<?php echo $seconds ?>&source=<?php echo $source; ?>&page=1"><<</a>
-              <?php for($i = max(1, $page - 3); $i <= min($pages, $page + 3); $i++) : ?>
-              <a href="/views/latest.php?q=<?php echo ($_GET['q'] ?? "") ?>&seconds=<?php echo $seconds ?>&source=<?php echo $source; ?>&page=<?php echo $i; ?>" <?php echo ($i == $page ? 'class="tdlink active"': 'class="tdlink"')?>><?php echo $i ?></a>
-              <?php endfor; ?>
-              <a class="tdlink" href="/views/latest.php?q=<?php echo ($_GET['q'] ?? "") ?>&seconds=<?php echo $seconds ?>&source=<?php echo $source; ?>&page=<?php echo $pages; ?>">>></a>
+                <a class="tdlink" href="/views/latest.php?q=<?php echo htmlspecialchars($_GET['q'] ?? '', ENT_QUOTES, 'UTF-8') ?>&seconds=<?php echo $seconds ?>&page=1"><<</a>
+                <?php for($i = max(1, $page - 3); $i <= min($pages, $page + 3); $i++) : ?>
+                <a href="/views/latest.php?q=<?php echo htmlspecialchars($_GET['q'] ?? '', ENT_QUOTES, 'UTF-8') ?>&seconds=<?php echo $seconds ?>&page=<?php echo $i; ?>" <?php echo ($i == $page ? 'class="tdlink active"' : 'class="tdlink"')?>><?php echo $i ?></a>
+                <?php endfor; ?>
+                <a class="tdlink" href="/views/latest.php?q=<?php echo htmlspecialchars($_GET['q'] ?? '', ENT_QUOTES, 'UTF-8') ?>&seconds=<?php echo $seconds ?>&page=<?php echo $pages; ?>">>></a>
             </div>
         <?php endif; ?>
 
@@ -50,37 +39,41 @@
                         <th>Latest heard</th>
                         <th>Comment/Other</th>
                         <th>Map</th>
-
                     </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($stations as $foundStation) : ?>
                     <tr>
                         <td>
-                            <img src="<?php echo $foundStation->getIconFilePath(22, 22); ?>" alt="Symbol"/>
+                            <img src="<?php echo htmlspecialchars($foundStation->getIconFilePath(22, 22) ?? '/symbols/symbol-125-47.png', ENT_QUOTES, 'UTF-8'); ?>" alt="Symbol"/>
                         </td>
                         <td>
-                            <a class="tdlink" href="/views/overview.php?id=<?php echo $foundStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($foundStation->name) ?></a>
+                            <a class="tdlink" href="/views/overview.php?id=<?php echo htmlspecialchars($foundStation->id, ENT_QUOTES, 'UTF-8'); ?>&imperialUnits=<?php echo htmlspecialchars($_GET['imperialUnits'] ?? 0, ENT_QUOTES, 'UTF-8'); ?>">
+                                <?php echo htmlspecialchars($foundStation->name ?? 'Unknown', ENT_QUOTES, 'UTF-8'); ?>
+                            </a>
                         </td>
                         <td class="station-latest-heard-timestamp" style="white-space: nowrap;">
-                            <?php echo $foundStation->latestConfirmedPacketTimestamp; ?>
+                            <?php echo htmlspecialchars($foundStation->latestConfirmedPacketTimestamp ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?>
                         </td>
                         <td>
                             <?php if ($foundStation->sourceId == 5 && $foundStation->getOgnDevice() !== null) : ?>
-                                <div style="width: 100px; display: inline-block;">Registration:</div><?php echo htmlspecialchars($foundStation->getOgnDevice()->registration); ?> <?php echo $foundStation->getOgnDevice()->cn ? '[' .htmlspecialchars($foundStation->getOgnDevice()->cn) . ']' : ''; ?><br/>
-                                <div style="width: 100px; display: inline-block;">Aircraft Model:</div><?php echo htmlspecialchars($foundStation->getOgnDevice()->aircraftModel); ?>
+                                <div style="width: 100px; display: inline-block;">Registration:</div>
+                                <?php echo htmlspecialchars($foundStation->getOgnDevice()->registration ?? '', ENT_QUOTES, 'UTF-8'); ?> 
+                                <?php echo $foundStation->getOgnDevice()->cn ? '[' . htmlspecialchars($foundStation->getOgnDevice()->cn, ENT_QUOTES, 'UTF-8') . ']' : ''; ?><br/>
+                                <div style="width: 100px; display: inline-block;">Aircraft Model:</div>
+                                <?php echo htmlspecialchars($foundStation->getOgnDevice()->aircraftModel ?? '', ENT_QUOTES, 'UTF-8'); ?>
                             <?php else : ?>
-                                <?php $latestPacket = PacketRepository::getInstance()->getObjectById($foundStation->latestPacketId, $foundStation->latestPacketTimestamp); ?>
-                                <?php echo htmlspecialchars($latestPacket->comment); ?>
+                                <?php $latestPacket = PacketRepository::getInstance()->getObjectById($foundStation->latestPacketId ?? 0, $foundStation->latestPacketTimestamp ?? 0); ?>
+                                <?php echo htmlspecialchars($latestPacket->comment ?? 'No comment', ENT_QUOTES, 'UTF-8'); ?>
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if ($foundStation->latestConfirmedPacketTimestamp > (time() - 60*60*24)) : ?>
-                                <a href="?sid=<?php echo $foundStation->id; ?>" onclick="
+                            <?php if (($foundStation->latestConfirmedPacketTimestamp ?? 0) > (time() - 60 * 60 * 24)) : ?>
+                                <a href="?sid=<?php echo htmlspecialchars($foundStation->id, ENT_QUOTES, 'UTF-8'); ?>" onclick="
                                     if (window.parent && window.parent.trackdirect) {
                                         $('.modal', parent.document).hide();
                                         window.parent.trackdirect.filterOnStationId([]);
-                                        window.parent.trackdirect.filterOnStationId([<?php echo $foundStation->id; ?>]);
+                                        window.parent.trackdirect.filterOnStationId([<?php echo htmlspecialchars($foundStation->id, ENT_QUOTES, 'UTF-8'); ?>]);
                                         return false;
                                     }">Map</a>
                             <?php else : ?>
@@ -96,7 +89,7 @@
 
     <?php if (count($stations) == 0) : ?>
         <p>
-            <b><i>No station have been heard in the last 24 hours.</i></b>
+            <b><i>No station has been heard in the last 24 hours.</i></b>
         </p>
     <?php endif; ?>
 </div>
@@ -104,9 +97,7 @@
     $(document).ready(function() {
         var locale = window.navigator.userLanguage || window.navigator.language;
         moment.locale(locale);
-        $("input[name='source']").click(function () {
-            loadView('/views/latest.php?q=<?php echo ($_GET['q'] ?? "") ?>&seconds=<?php echo $seconds ?>&source=<?php echo $source; ?>&page=<?php echo $page ?>&source=' + $("input[name='source']:checked").val());
-        });
+
         $('.station-latest-heard-timestamp').each(function() {
             if ($(this).html().trim() != '' && !isNaN($(this).html().trim())) {
                 $(this).html(moment(new Date(1000 * $(this).html())).format('L LTSZ'));

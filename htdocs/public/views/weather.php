@@ -1,36 +1,27 @@
 <?php require dirname(__DIR__) . "../../includes/bootstrap.php"; ?>
 
-<?php $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null); ?>
+<?php
+  if (isset($_GET['c'])) {
+    $station = StationRepository::getInstance()->getObjectByName(strtoupper($_GET['c']) ?? null);
+  } else {
+    $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null);
+  }
+?>
 <?php if ($station->isExistingObject()) : ?>
     <?php
         $maxDays = 10;
-        if (!isAllowedToShowOlderData()) {
-            $maxDays = 1;
-        }
         $format = $_GET['format'] ?? 'current';
-        $graphLabels = array('Time', 'Temperature', 'Humidity', 'Pressure', 'Rain (Last Hour)', 'Rain (Last 24 Hours)', 'Rain (Since Midnight)', 'Wind Speed', 'Wind Direction', 'Luminosity', 'Snow');
-        $missingGraphs = [];
-
         $start = $_GET['start'] ?? time()-864000;
         $end = $_GET['end'] ?? time();
 
-        if ($format == 'table') {
-          $start_time = microtime(true);
-          $page = $_GET['page'] ?? 1;
-          $rows = $_GET['rows'] ?? 25;
-          $offset = ($page - 1) * $rows;
-          $weatherPackets = PacketWeatherRepository::getInstance()->getLatestObjectListByStationIdAndLimit($station->id, $rows, $offset, $maxDays, $start, $end);
-          $count = PacketWeatherRepository::getInstance()->getLatestNumberOfPacketsByStationIdAndLimit($station->id, $maxDays, $start, $end);
-          $dbtime = microtime(true) - $start_time;
-          $pages = ceil($count / $rows);
-        } else {
-          $weatherPackets = PacketWeatherRepository::getInstance()->getLatestObjectListByStationIdAndLimit($station->id, 1, 0, $maxDays);
-          $count = 1;
-          $pages = 0;
-        }
+        $graphLabels = array('Time', 'Temperature', 'Humidity', 'Pressure', 'Rain (Last Hour)', 'Rain (Last 24 Hours)', 'Rain (Since Midnight)', 'Wind Speed', 'Wind Direction', 'Luminosity', 'Snow');
+        $missingGraphs = [];
 
+        $start_time = microtime(true);
+        $weatherPackets = PacketWeatherRepository::getInstance()->getLatestObjectListByStationIdAndLimit($station->id, 1, 0, $maxDays);
+        $dbtime = microtime(true) - $start_time;
 
-        $titles = array('current' => 'Current Conditions', 'graph' => 'Weather Graphs', 'table' => 'Weather Data');
+        $titles = array('current' => 'Current Conditions', 'almanac' => 'Almanac', 'graph' => 'Weather Graphs', 'table' => 'Weather Data');
     ?>
 
     <title><?php echo $station->name; ?> <?php echo $titles[$format]; ?></title>
@@ -50,6 +41,7 @@
 
         <div class="modal-inner-content-menu" style="margin-left:25px;">
             <?php if ($format != 'current'): ?><a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=current"><?php echo $titles['current']; ?></a><?php else: ?><span><?php echo $titles['current']; ?></span><?php endif; ?>
+            <?php if ($format != 'almanac'): ?><a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=almanac"><?php echo $titles['almanac']; ?></a><?php else: ?><span><?php echo $titles['almanac']; ?></span><?php endif; ?>
             <?php if ($format != 'graph'): ?><a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=graph"><?php echo $titles['graph']; ?></a><?php else: ?><span><?php echo $titles['graph']; ?></span><?php endif; ?>
             <?php if ($format != 'table'): ?><a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=table"><?php echo $titles['table']; ?></a><?php else: ?><span><?php echo $titles['table']; ?></span><?php endif; ?>
         </div>
@@ -57,16 +49,21 @@
         <div class="horizontal-line">&nbsp;</div>
 
         <?php if (count($weatherPackets) > 0) : ?>
-            <?php if ($format == 'current'): ?><p>Here are the current (last reported) weather conditions for station/object <?php echo $station->name; ?>.  If nothing is displayed, no weather information has been provided within the past <?php echo $maxDays; ?> day(s).</p><?php endif; ?>
-            <?php if ($format != 'current'): ?><p>This is the latest recevied weather packets stored in our database for station/object <?php echo $station->name; ?>. If no graphs are shown the sender has not sent any weather packets during the specified time range.</p><?php endif; ?>
+          <?php if ($format == 'current'): ?>
+            <p>Here are the current (last reported) weather conditions for station/object <?php echo $station->name; ?>.  If nothing is displayed, no weather information has been provided within the past <?php echo $maxDays; ?> day(s).</p>
+          <?php elseif ($format == 'almanac'): ?>
+            <p>This is the current climate summary for station/object <?php echo $station->name; ?>.  Daily values are determined by calculating the stations local timezone. If no readings are displayed in any of the tables below it means there has not been enough weather information collected for that period.</p>
+          <?php else: ?>
+            <p>This is the latest recevied weather packets stored in our database for station/object <?php echo $station->name; ?>. If no graphs are shown the sender has not sent any weather packets during the specified time range.</p>
+          <?php endif; ?>
 
             <div style="float:left;line-height: 28px;">
                     <?php if ($format == 'graph'): ?>
                       <span style="float:left;">Displaying data from <span id="oldest-timestamp" style="font-weight:bold;"></span> to <span id="latest-timestamp" style="font-weight:bold;"></span>.  <span id="records"></span> (max 1000)</span>
                     <?php elseif ($format == 'current'): ?>
                       <span style="">Current weather conditions reported as of <span id="latest-timestamp" style="font-weight:bold;"><?php echo ($weatherPackets[0]->wxRawTimestamp != null?$weatherPackets[0]->wxRawTimestamp:$weatherPackets[0]->timestamp); ?></span>.
-                    <?php else: ?>
-                      <span style="float:left;">Displaying <?php echo $offset+1; ?> - <?php echo ($offset+$rows < $count ? $offset+$rows : $count); ?> of <?php echo $count ?> weather records.  Data retrieved in <?php echo round($dbtime, 3) ?> seconds.</span>
+                    <?php elseif ($format != 'almanac'): ?>
+                      <span style="float:left;">Displaying data from <span id="oldest-timestamp" style="font-weight:bold;"><?php echo $start;?></span> to <span id="latest-timestamp" style="font-weight:bold;"><?php echo $end;?></span>. Data retrieved in <span id="dbtime">....</span> seconds..</span>
                     <?php endif; ?>
                   <script type="text/javascript">
                           $('#oldest-timestamp, #latest-timestamp').each(function() {
@@ -79,18 +76,9 @@
             </div>
             <?php if ($format == 'current'): ?><span style="float:right;"><img src="/public/images/dotColor3.svg" style="height:24px;vertical-align:middle;" id="live-img" /><span id="live-status" style="vertical-align:middle;">Waiting for connection...</span></span><?php endif; ?>
 
-            <?php if ($format != 'current'): ?>
+            <?php if ($format != 'current' && $format != 'almanac'): ?>
               <form id="wxhistory-form" style="float:right;line-height: 28px">
-                Show
-                <?php if ($format == 'table'): ?>
-                  <select id="weather-rows" style="" class="pagination-rows">
-                      <option <?php echo ($rows == 25 ? 'selected' : ''); ?> value="25">25 rows</option>
-                      <option <?php echo ($rows == 50 ? 'selected' : ''); ?> value="50">50 rows</option>
-                      <option <?php echo ($rows == 100 ? 'selected' : ''); ?> value="100">100 rows</option>
-                      <option <?php echo ($rows == 200 ? 'selected' : ''); ?> value="200">200 rows</option>
-                      <option <?php echo ($rows == 300 ? 'selected' : ''); ?> value="300">300 rows</option>
-                  </select>
-                <?php else: ?> data <?php endif; ?>
+                Show data
                   from <input type="text" id="start-date" class="form-control" style="height:.5em;width:9em" readonly />
                 to <input type="text" id="end-date" class="form-control" style="height:.5em;width:9em" readonly />
                 <script>
@@ -132,16 +120,6 @@
             <?php endif; ?>
 
             <div style="clear:both;"></div>
-
-            <?php if ($pages > 1 && $format == 'table'): ?>
-                <div class="pagination">
-                  <a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=table&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&page=1"><<</a>
-                  <?php for($i = max(1, $page - 3); $i <= min($pages, $page + 3); $i++) : ?>
-                  <a href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=table&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&page=<?php echo $i; ?>" <?php echo ($i == $page ? 'class="tdlink active"': 'class="tdlink"')?>><?php echo $i ?></a>
-                  <?php endfor; ?>
-                  <a class="tdlink" href="/views/weather.php?id=<?php echo $station->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=table&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&page=<?php echo $pages; ?>">>></a>
-                </div>
-            <?php endif; ?>
 
             <!-- Current (last reported) weather conditions) -->
             <?php if ($format == 'current'): ?>
@@ -190,14 +168,14 @@
                 <canvas data-type="radial-gauge" id="pressure-gauge" class="weather-gauge"
                   data-units="<?php echo isImperialUnitUser() ? 'inHg' : 'hPa'?>"
                   data-title="Pressure"
-                  data-min-value="<?php echo isImperialUnitUser() ? '24' : '825'?>"
-                  data-max-value="<?php echo isImperialUnitUser() ? '33' : '1100'?>"
-                  data-major-ticks="<?php echo isImperialUnitUser() ? '24,26,26,27,28,29,30,31,32,33' : '825,850,875,900,925,950,975,1000,1025,1050,1075,1100'?>"
+                  data-min-value="<?php echo isImperialUnitUser() ? '26' : '825'?>"
+                  data-max-value="<?php echo isImperialUnitUser() ? '32' : '1100'?>"
+                  data-major-ticks="<?php echo isImperialUnitUser() ? '26,27,28,29,30,31,32' : '825,850,875,900,925,950,975,1000,1025,1050,1075,1100'?>"
                   data-minor-ticks="2"
                   data-stroke-ticks="true"
-                  data-highlights='[{"from": <?php echo isImperialUnitUser() ? '24' : '825'?>, "to": <?php echo isImperialUnitUser() ? '28' : '900'?>, "color": "rgba(213, 62, 62, .6)"},
+                  data-highlights='[{"from": <?php echo isImperialUnitUser() ? '26' : '825'?>, "to": <?php echo isImperialUnitUser() ? '28' : '900'?>, "color": "rgba(213, 62, 62, .6)"},
                                     {"from": <?php echo isImperialUnitUser() ? '28' : '900'?>, "to": <?php echo isImperialUnitUser() ? '30' : '975'?>, "color": "rgba(255, 173, 10, .5)"},
-                                    {"from": <?php echo isImperialUnitUser() ? '30' : '1000'?>, "to": <?php echo isImperialUnitUser() ? '33' : '1100'?>, "color": "rgba(0, 255, 0, .3)"} ]'
+                                    {"from": <?php echo isImperialUnitUser() ? '30' : '975'?>, "to": <?php echo isImperialUnitUser() ? '32' : '1100'?>, "color": "rgba(0, 255, 0, .3)"} ]'
                   data-value="<?php echo isImperialUnitUser() ? round(convertMbarToInchHg($weatherPackets[0]->pressure), 1) : round($weatherPackets[0]->pressure, 1)?>"
                 ></canvas>
                 <script>wxGaugeParams('pressure-gauge');</script>
@@ -287,6 +265,172 @@
               <?php endif; ?>
             <?php endif; ?>
 
+
+            <?php if ($format == 'almanac'): ?>
+              <?php
+                $tz = getNearestTimezone($station->latestConfirmedLatitude, $station->latestConfirmedLongitude);
+                $date = new DateTime("today midnight", $tz);
+
+                $almanac = array();
+                for ($x = 0; $x < 7; $x++) {
+                  $almanac[$x] = PacketWeatherRepository::getInstance()->getAlmanac($station->id, $date->getTimestamp() - (86400 * $x));
+                }
+                $almanac_today = $almanac[0];
+                $almanac_yesterday = $almanac[1];
+                $high_temperature = max(array_column($almanac, 'high_temperature'));
+                $avg_max_temperature = max(array_column($almanac, 'average_temperature'));
+                $avg_min_temperature = min(array_column($almanac, 'average_temperature'));
+                $low_temperature = min(array_column($almanac, 'low_temperature'));
+                $max_rain = max(array_column($almanac, 'rainfall'));
+                $max_wind = max(array_column($almanac, 'wind_speed'));
+                $max_gust = max(array_column($almanac, 'wind_gust'));
+              ?>
+              <div class="datagrid" style="width:100%;border:none">
+                  <table style="width:35%;float:left;margin:20px 9% 20px 9%;border:1px solid black;">
+                      <thead>
+                        <tr>
+                            <th colspan="2" style="padding:2px;font-weight:bold;">Today's Weather</td>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style="width:60%">High Temperature</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_today['high_temperature']), 2) . '&deg; F' : round($almanac_today['high_temperature'], 2) . '&deg; C'; ?></td>
+                        </tr>
+                        <tr>
+                          <td>Low Temperature</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_today['low_temperature']), 2) . '&deg; F' : round($almanac_today['low_temperature'], 2) . '&deg; C'; ?></td>
+                        </tr>
+                        <tr>
+                          <td>Average Temperature</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_today['average_temperature']), 2) . '&deg; F' : round($almanac_today['average_temperature'], 2) . '&deg; C'; ?></td>
+                        </tr>
+                        <tr>
+                          <td>Rain:</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertMmToInch($almanac_today['rainfall']), 2) . ' in' : round($almanac_today['rainfall'], 2) . ' mm'; ?></td>
+                        </tr>
+                        <tr>
+                          <td>Wind (Gust):</td>
+                          <td>
+                            <?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac_today['wind_speed']), 2) . ' mph' : round($almanac_today['wind_speed'], 2) . ' m/s'; ?>
+                            (<?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac_today['wind_gust']), 2) . ' mph' : round($almanac_today['wind_gust'], 2) . ' m/s'; ?>)
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Highest Pressure:</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac_today['high_pressure']), 1) . ' in' : round($almanac_today['high_pressure'], 1) . ' mm'; ?></td>
+                        </tr>
+                        <tr>
+                          <td>Lowest Pressure</td>
+                          <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac_today['low_pressure']), 1) . ' in' : round($almanac_today['low_pressure'], 1) . ' mm'; ?></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <table style="width:35%;float:left;margin:20px;border:1px solid black;">
+                        <thead>
+                          <tr>
+                              <th colspan="2" style="padding:2px;font-weight:bold;">Yesterday's Weather</td>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style="width:60%">High Temperature</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_yesterday['high_temperature']), 2) . '&deg; F' : round($almanac_yesterday['high_temperature'], 2) . '&deg; C'; ?></td>
+                          </tr>
+                          <tr>
+                            <td>Low Temperature</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_yesterday['low_temperature']), 2) . '&deg; F' : round($almanac_yesterday['low_temperature'], 2) . '&deg; C'; ?></td>
+                          </tr>
+                          <tr>
+                            <td>Average Temperature</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac_yesterday['average_temperature']), 2) . '&deg; F' : round($almanac_yesterday['average_temperature'], 2) . '&deg; C'; ?></td>
+                          </tr>
+                          <tr>
+                            <td>Rain:</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertMmToInch($almanac_yesterday['rainfall']), 2) . ' in' : round($almanac_yesterday['rainfall'], 2) . ' mm'; ?></td>
+                          </tr>
+                          <tr>
+                            <td>Wind (Gust):</td>
+                            <td>
+                              <?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac_yesterday['wind_speed']), 2) . ' mph' : round($almanac_yesterday['wind_speed'], 2) . ' m/s'; ?>
+                              (<?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac_yesterday['wind_gust']), 2) . ' mph' : round($almanac_yesterday['wind_gust'], 2) . ' m/s'; ?>)
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Highest Pressure:</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac_yesterday['high_pressure']), 1) . ' in' : round($almanac_yesterday['high_pressure'], 1) . ' mm'; ?></td>
+                          </tr>
+                          <tr>
+                            <td>Lowest Pressure</td>
+                            <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac_yesterday['low_pressure']), 1) . ' in' : round($almanac_yesterday['low_pressure'], 1) . ' mm'; ?></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    <div style="clear:both"></div>
+                      <table style="width:98%;margin:10px;border:1px solid black;">
+                        <thead>
+                          <tr>
+                              <th style="padding:2px;font-weight:bold;">Weather for the Past Week</td>
+                            <?php for ($x = 0; $x < 7; $x++): ?>
+                              <th><?php if ($x == 0):?>Today<?php elseif ($x == 1):?>Yesterday<?php else:?><?php echo date('D M d', $date->getTimestamp()-(86400*$x));?><?php endif;?></th>
+                            <?php endfor; ?>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style="width:20%">High Temperature</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td<?php if ($almanac[$x]['high_temperature'] == $high_temperature):?> style="color:#FF0033"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac[$x]['high_temperature']), 2) . '&deg; F' : round($almanac[$x]['high_temperature'], 2) . '&deg; C'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Low Temperature</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td<?php if ($almanac[$x]['low_temperature'] == $low_temperature):?> style="color:#2200FF"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac[$x]['low_temperature']), 2) . '&deg; F' : round($almanac[$x]['low_temperature'], 2) . '&deg; C'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Average Temperature</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td<?php if ($almanac[$x]['average_temperature'] == $avg_max_temperature):?> style="color:#FF0033"<?php elseif ($almanac[$x]['average_temperature'] == $avg_min_temperature):?> style="color:#2200FF"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertCelciusToFahrenheit($almanac[$x]['average_temperature']), 2) . '&deg; F' : round($almanac[$x]['average_temperature'], 2) . '&deg; C'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Rain:</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td<?php if ($almanac[$x]['rainfall'] == $max_rain):?> style="color:#11BB33"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertMmToInch($almanac[$x]['rainfall']), 2) . ' in' : round($almanac[$x]['rainfall'], 2) . ' mm'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Wind:</td>
+                              <?php for ($x = 0; $x < 7; $x++): ?>
+                                <td<?php if ($almanac[$x]['wind_speed'] == $max_wind):?> style="color:#CA33FF"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac[$x]['wind_speed']), 2) . ' mph' : round($almanac[$x]['wind_speed'], 2) . ' m/s'; ?></td>
+                              <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Wind Gust:</td>
+                              <?php for ($x = 0; $x < 7; $x++): ?>
+                                <td<?php if ($almanac[$x]['wind_gust'] == $max_gust):?> style="color:#CA33FF"<?php endif;?>><?php echo isImperialUnitUser() ? round(convertMpsToMph($almanac[$x]['wind_gust']), 2) . ' mph' : round($almanac[$x]['wind_speed'], 2) . ' m/s'; ?></td>
+                              <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Highest Pressure:</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac[$x]['high_pressure']), 1) . ' in' : round($almanac[$x]['high_pressure'], 1) . ' mm'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                          <tr>
+                            <td>Lowest Pressure</td>
+                          <?php for ($x = 0; $x < 7; $x++): ?>
+                            <td><?php echo isImperialUnitUser() ? round(convertMbarToInchHg($almanac[$x]['low_pressure']), 1) . ' in' : round($almanac[$x]['low_pressure'], 1) . ' mm'; ?></td>
+                          <?php endfor; ?>
+                          </tr>
+                        </tbody>
+                      </table>
+                  </div>
+            <?php endif; ?>
+
+
             <?php if ($format == 'graph'): ?>
               <?php for ($graphIdx = 1; $graphIdx < 11; $graphIdx++) : ?>
               <?php
@@ -349,154 +493,28 @@
               </script>
             <?php endif; ?>
             <?php if ($format == 'table'): ?>
-              <div class="datagrid datagrid-weather" style="max-width:1000px;">
-                  <table>
+              <div class="datagrid datagrid-weather">
+                  <table id="weather-table" style="width:100%">
                       <thead>
                           <tr>
                               <th>Time</th>
                               <th>Temp.</th>
                               <th>Humidity</th>
                               <th>Pressure</th>
-                              <th>Rain*</th>
-                              <th>Wind**</th>
+                              <th>Wind Speed</th>
+                              <th>Wind Direction</th>
+                              <th>Rain 1hr</th>
+                              <th>Rain 24hr</th>
+                              <th>Rain Midnight</th>
                               <th>Luminosity</th>
                               <th>Snow</th>
                           </tr>
                       </thead>
                       <tbody>
-                      <?php foreach ($weatherPackets as $packetWeather) : ?>
-
-                          <tr>
-                              <td class="weathertime">
-                                  <?php echo ($packetWeather->wxRawTimestamp != null?$packetWeather->wxRawTimestamp:$packetWeather->timestamp); ?>
-                              </td>
-                              <td>
-                                  <?php if ($packetWeather->temperature !== null) : ?>
-                                      <?php if (isImperialUnitUser()) : ?>
-                                          <?php echo round(convertCelciusToFahrenheit($packetWeather->temperature), 2); ?>&deg; F
-                                      <?php else : ?>
-                                          <?php echo round($packetWeather->temperature, 2); ?>&deg; C
-                                      <?php endif; ?>
-                                  <?php else : ?>
-                                      -
-                                  <?php endif; ?>
-                              </td>
-                              <td>
-                                  <?php if ($packetWeather->humidity !== null) : ?>
-                                      <?php echo $packetWeather->humidity; ?>%
-                                  <?php else : ?>
-                                      -
-                                  <?php endif; ?>
-                              </td>
-                              <td>
-                                  <?php if ($packetWeather->pressure !== null) : ?>
-                                      <?php if (isImperialUnitUser()) : ?>
-                                          <?php echo round(convertMbarToInchHg($packetWeather->pressure),1); ?> inHg
-                                      <?php else : ?>
-                                          <?php echo round($packetWeather->pressure,1); ?> hPa
-                                      <?php endif; ?>
-
-                                  <?php else : ?>
-                                      -
-                                  <?php endif; ?>
-                              </td>
-
-                              <?php if ($weatherPackets[0]->rain_1h !== null) : ?>
-                                  <td title="<?php echo $packetWeather->getRainSummary(false, true, true); ?>">
-                                      <?php if ($packetWeather->rain_1h !== null) : ?>
-                                          <?php if (isImperialUnitUser()) : ?>
-                                              <?php echo round(convertMmToInch($packetWeather->rain_1h), 2); ?> in
-                                          <?php else : ?>
-                                              <?php echo round($packetWeather->rain_1h, 2); ?> mm
-                                          <?php endif; ?>
-                                      <?php else : ?>
-                                          -
-                                      <?php endif; ?>
-                                  </td>
-                              <?php elseif ($weatherPackets[0]->rain_24h !== null) : ?>
-                                  <td title="<?php echo $packetWeather->getRainSummary(true, false, true); ?>">
-                                      <?php if ($packetWeather->rain_24h !== null) : ?>
-                                          <?php if (isImperialUnitUser()) : ?>
-                                              <?php echo round(convertMmToInch($packetWeather->rain_24h), 2); ?> in
-                                          <?php else : ?>
-                                              <?php echo round($packetWeather->rain_24h, 2); ?> mm
-                                          <?php endif; ?>
-                                      <?php else : ?>
-                                          -
-                                      <?php endif; ?>
-                                  </td>
-                              <?php else : ?>
-                                  <td title="<?php echo $packetWeather->getRainSummary(true, true, false); ?>">
-                                      <?php if ($packetWeather->rain_since_midnight !== null) : ?>
-                                          <?php if (isImperialUnitUser()) : ?>
-                                              <?php echo round(convertMmToInch($packetWeather->rain_since_midnight), 2); ?> in
-                                          <?php else : ?>
-                                              <?php echo round($packetWeather->rain_since_midnight, 2); ?> mm
-                                          <?php endif; ?>
-                                      <?php else : ?>
-                                          -
-                                      <?php endif; ?>
-                                  </td>
-                              <?php endif; ?>
-
-                              <td title="Wind gust: <?php echo ($packetWeather->wind_gust !== null?round($packetWeather->wind_gust,2):'-'); ?> m/s">
-
-                                  <?php if (isImperialUnitUser()) : ?>
-                                      <?php if ($packetWeather->wind_speed !== null && $packetWeather->wind_speed > 0) : ?>
-                                          <?php echo round(convertMpsToMph($packetWeather->wind_speed), 2); ?> mph, <?php echo $packetWeather->wind_direction; ?>&deg;
-                                      <?php elseif($packetWeather->wind_speed !== null) : ?>
-                                          <?php echo round(convertMpsToMph($packetWeather->wind_speed), 2); ?> mph
-                                      <?php else : ?>
-                                          -
-                                      <?php endif; ?>
-
-                                  <?php else : ?>
-                                      <?php if ($packetWeather->wind_speed !== null && $packetWeather->wind_speed > 0) : ?>
-                                          <?php echo round($packetWeather->wind_speed, 2); ?> m/s, <?php echo $packetWeather->wind_direction; ?>&deg;
-                                      <?php elseif($packetWeather->wind_speed !== null) : ?>
-                                          <?php echo round($packetWeather->wind_speed, 2); ?> m/s
-                                      <?php else : ?>
-                                          -
-                                      <?php endif; ?>
-                                  <?php endif; ?>
-                              </td>
-
-                              <td>
-                                  <?php if ($packetWeather->luminosity !== null) : ?>
-                                      <?php echo round($packetWeather->luminosity,0); ?> W/m&sup2;
-                                  <?php else : ?>
-                                      -
-                                  <?php endif; ?>
-                              </td>
-
-                              <td>
-                                  <?php if ($packetWeather->snow !== null) : ?>
-                                      <?php if (isImperialUnitUser()) : ?>
-                                          <?php echo round(convertMmToInch($packetWeather->snow), 0); ?> in
-                                      <?php else : ?>
-                                          <?php echo round($packetWeather->snow, 0); ?> mm
-                                      <?php endif; ?>
-                                  <?php else : ?>
-                                      -
-                                  <?php endif; ?>
-                              </td>
-                          </tr>
-
-                      <?php endforeach; ?>
                       </tbody>
                   </table>
               </div>
 
-            <p>
-                <?php if ($weatherPackets[0]->rain_1h !== null) : ?>
-                    * Rain latest hour (hover to see other rain measurements)<br/>
-                <?php elseif ($weatherPackets[0]->rain_24h !== null) : ?>
-                    * Rain latest 24 hours (hover to see other rain measurements)<br/>
-                <?php else : ?>
-                    * Rain since midnight (hover to see other rain measurements)<br/>
-                <?php endif; ?>
-                ** Current wind speed in m/s (hover to see current wind gust speed)
-            </p>
           <?php endif; ?>
 
         <?php endif; ?>
@@ -505,7 +523,13 @@
             <p><i><b>No recent weather reports.</b></i></p>
         <?php endif; ?>
 
+        <div class="quiklink">
+          Link directly to this page: <input id="quiklink" type="text" value="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]"; ?>/station/<?php echo $station->name; ?>/<?php echo basename(__FILE__, '.php'); ?>/<?php echo $format; ?>/" readonly>
+          <img id="quikcopy" src="/images/copy.svg"/>
+        </div>
+
     </div>
+
 
     <script>
         $(document).ready(function() {
@@ -522,6 +546,76 @@
                 loadView("/views/weather.php?id=<?php echo $station->id ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&format=table&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=" + $('#weather-rows').val() + "&page=1");
             });
 
+            <?php if ($format=='table'): ?>
+              $('#weather-table').DataTable( {
+                ajax: {
+                  url: '/data/data.php?module=weather&command=getWeather&id=<?php echo $station->id ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?><?php if (isset($_GET['start'])): ?>&start=<?php echo $_GET['start'];?>&end=<?php echo $_GET['end'];?><?php endif;?>',
+                  dataSrc: function (json) {
+                    $("#dbtime").text(json.data.dbtime);
+                    return json.data.readings;
+                  }
+                },
+                columns: [
+                  { data: 'ts',
+                    render: DataTable.render.datetime(),
+                    width: '10em' },
+                  { data: '0',
+                    render: function(data) {
+                        return data + ' &deg;<?php echo isImperialUnitUser() ? 'F' : 'C'?>';
+                      },
+                    width: '2em' },
+                  { data: '1',
+                    render: function(data) {
+                        return data + ' %';
+                      },
+                    width: '3em' },
+                  { data: '2',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'inHg' : 'hPa'?>';
+                      },
+                    width: '3em' },
+                  { data: '3',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'mph' : 'm/s'?>';
+                      },
+                    width: '3em' },
+                  { data: '4',
+                    render: function(data) {
+                        return data + ' &deg;';
+                      },
+                    width: '3em' },
+                  { data: '5',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'in' : 'mm'?>';
+                      },
+                    width: '3em' },
+                  { data: '6',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'in' : 'mm'?>';
+                      },
+                    width: '3em' },
+                  { data: '7',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'in' : 'mm'?>';
+                      },
+                    width: '3em' },
+                  { data: '8',
+                    render: function(data) {
+                        return data + ' W/m²';
+                      },
+                    width: '3em' },
+                  { data: '9',
+                    render: function(data) {
+                        return data + ' <?php echo isImperialUnitUser() ? 'in' : 'mm'?>';
+                      },
+                    width: '3em' },
+                ],
+                order: [[0, 'desc']],
+                responsive: true
+              });
+              $("input[type=search]").css('padding', '1px');
+            <?php endif; ?>
+
             if (window.trackdirect) {
                 <?php if ($station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
                     window.trackdirect.addListener("map-created", function() {
@@ -534,6 +628,8 @@
                   window.liveData.start("<?php echo $station->name;?>", <?php echo $station->latestPacketTimestamp; ?>, 'wxcurrent');
                 });
             }
+
+            quikLink();
         });
     </script>
 <?php endif; ?>

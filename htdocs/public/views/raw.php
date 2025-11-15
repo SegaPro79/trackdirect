@@ -1,6 +1,12 @@
 <?php require dirname(__DIR__) . "../../includes/bootstrap.php"; ?>
 
-<?php $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null); ?>
+<?php
+  if (isset($_GET['c'])) {
+    $station = StationRepository::getInstance()->getObjectByName(strtoupper($_GET['c']) ?? null);
+  } else {
+    $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null);
+  }
+?>
 <?php if ($station->isExistingObject()) : ?>
 <?php
   $page = $_GET['page'] ?? 1;
@@ -133,13 +139,13 @@
           </div>
           <?php if ($pages > 1): ?>
               <form style="float:left;line-height: 28px;padding-left:30px;">
-                <?php if ($page > 1): ?><a class="tdlink" href="/views/raw.php?id=<?php echo $station->id; ?>&category=<?php echo ($_GET['category'] ?? 1) ?>&type=<?php echo ($_GET['type'] ?? 1); ?>&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&page=<?php echo $page-1;?>"><b>&lt;</b></a><?php endif; ?>
+                <?php if ($page > 1): ?><a class="tdlink" href="/views/raw.php?id=<?php echo $station->id; ?>&category=<?php echo ($_GET['category'] ?? 1) ?>&type=<?php echo ($_GET['type'] ?? 1); ?>&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&page=<?php echo $page-1;?>"><b>&lt;</b></a><?php endif; ?>
                 Page <select id="raw-page">
                 <?php for($i = 1; $i <= $pages; $i++): ?>
                   <option value="<?php echo $i; ?>" <?php if ($page == $i) echo ' selected="selected"'; ?>><?php echo $i; ?></option>
                 <?php endfor; ?>
                 </select>
-                <?php if ($page < $pages): ?><a class="tdlink" href="/views/raw.php?id=<?php echo $station->id; ?>&category=<?php echo ($_GET['category'] ?? 1) ?>&type=<?php echo ($_GET['type'] ?? 1); ?>&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&page=<?php echo $page + 1; ?>"><b>&gt;</b></a><?php endif; ?>
+                <?php if ($page < $pages): ?><a class="tdlink" href="/views/raw.php?id=<?php echo $station->id; ?>&category=<?php echo ($_GET['category'] ?? 1) ?>&type=<?php echo ($_GET['type'] ?? 1); ?>&start=<?php echo $start; ?>&end=<?php echo $end; ?>&rows=<?php echo $rows; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ;?>&page=<?php echo $page + 1; ?>"><b>&gt;</b></a><?php endif; ?>
               </form>
               <script>
                 $("#raw-page").change(function() {
@@ -542,6 +548,12 @@
             <b><i>No raw packets found.</i></b>
         </p>
         <?php endif; ?>
+
+        <div class="quiklink">
+          Link directly to this page: <input id="quiklink" type="text" value="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]"; ?>/station/<?php echo $station->name; ?>/<?php echo basename(__FILE__, '.php'); ?>/" readonly>
+          <img id="quikcopy" src="/images/copy.svg"/>
+        </div>
+
     </div>
 
     <script>
@@ -584,6 +596,7 @@
                     });
                 <?php endif; ?>
             }
+            quikLink();
         });
     </script>
 <?php endif; ?>

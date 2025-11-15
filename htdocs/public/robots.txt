@@ -1,4 +1,20 @@
+# aprsdirect.de robots.txt
+
 User-agent: *
-Disallow: /heatmaps/
-Disallow: /data/
+Disallow: /views/
+Disallow: /api/
+Disallow: /admin/
+Crawl-delay: 5
+
+Disallow: /views/overview.php
+Disallow: /views/statistics.php
+Disallow: /views/weather.php
+Disallow: /views/telemetry.php
+Disallow: /views/raw.php
+Disallow: /views/live.php
+Disallow: /views/messages.php
+Disallow: /*?*imperialUnits=
+Disallow: /*?*page=
+Disallow: /*?*rows=
+
 

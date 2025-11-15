@@ -2,7 +2,7 @@
 
 <?php
   if (isset($_GET['c'])) {
-    $station = StationRepository::getInstance()->getObjectByName($_GET['c'] ?? null);
+    $station = StationRepository::getInstance()->getObjectByName(strtoupper($_GET['c']) ?? null);
   } else {
     $station = StationRepository::getInstance()->getObjectById($_GET['id'] ?? null);
   }
@@ -150,10 +150,14 @@
                     </div>
                 </div>
 
-
                 <div>
                     <div class="overview-content-summary-hr-indent">Path:</div>
                     <div class="overview-content-summary-cell-path overview-content-summary-indent" title="Latest path" id="raw_path"><?php echo $latestPacket->rawPath; ?></div>
+                </div>
+
+                <div>
+                    <div class="overview-content-summary-hr-indent">Equipment:</div>
+                    <div class="overview-content-summary-cell-path overview-content-summary-indent" title="Latest equipment used"><?php echo $latestPacket->getEquipmentTypeName(); ?></div>
                 </div>
 
                 <?php if ($latestPacket->comment != '') : ?>
@@ -236,6 +240,27 @@
                         <?php echo round($station->latestConfirmedLatitude, 5); ?>, <?php echo round($station->latestConfirmedLongitude, 5); ?>
                     </div>
                 </div>
+
+              <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+                <div>
+                    <div class="overview-content-summary-hr-indent">Location:</div>
+                    <div id="position-location" class="overview-content-summary-indent" title="Latest position location">
+                      Resolving...
+                    </div>
+                </div>
+                <div>
+                    <div class="overview-content-summary-hr-indent">Local Time:</div>
+                    <div id="station-localtime" class="overview-content-summary-indent" title="Local time for the station">
+                      Resolving...
+                    </div>
+                </div>
+                <div>
+                    <div class="overview-content-summary-hr-indent">Time Zone:</div>
+                    <div id="position-timezone" class="overview-content-summary-indent" title="Time zone for latest position">
+                      Resolving...
+                    </div>
+                </div>
+              <?php endif;?>
 
                 <div>
                     <div class="overview-content-summary-hr-indent">Receive Time:</div>
@@ -533,8 +558,18 @@
 
                 <?php endif; ?>
 
+                <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+                    <li id="nominatim-license"></li>
+                <?php endif; ?>
+
             </ul>
         </div>
+
+      <div class="quiklink">
+        Link directly to this page: <input id="quiklink" type="text" value="<?php echo (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]"; ?>/station/<?php echo $station->name; ?>/" readonly>
+        <img id="quikcopy" src="/images/copy.svg"/>
+      </div>
+
     </div>
 
     <script>
@@ -571,7 +606,30 @@
                   window.liveData.start("<?php echo $station->name;?>", <?php echo $station->latestPacketTimestamp; ?>, 'overview');
                 });
             }
+
+          <?php if (getWebsiteConfig('nominatim_geocoding_api') && $station->latestConfirmedLatitude != null && $station->latestConfirmedLongitude != null) : ?>
+            $.getJSON('<?php echo getWebsiteConfig('nominatim_geocoding_api'); ?>/reverse?lat=<?php echo $station->latestConfirmedLatitude; ?>&lon=<?php echo $station->latestConfirmedLongitude; ?>&format=json').done(function(response) {
+              $.getJSON('/data/data.php?module=geocoding&command=getLocalTime&id=<?php echo $station->id; ?>&lat=<?php echo $station->latestConfirmedLatitude; ?>&lon=<?php echo $station->latestConfirmedLongitude; ?>&cc=' + response.address.country_code).done(function(response) {
+                var lt = moment.utc(new Date()).utcOffset(response.data.offset/60)
+                $("#position-timezone").text(response.data.tz + ' (GMT '+lt.format('Z')+')');
+                $("#station-localtime").text(lt.format('L LTS'));
+              });
+              var locations = [];
+              if (response.address.road) locations.push(response.address.road);
+              if (response.address.city) locations.push(response.address.city.replace('City of', ''));
+              else if (response.address.town) locations.push(response.address.town.replace('Town of', ''));
+              else if (response.address.village) locations.push(response.address.village.replace('Village of', '').replace('Town of', ''));
+              if (response.address.county) locations.push(response.address.county);
+              if (response.address.state) locations.push(response.address.state);
+              if (response.address.postcode) locations.push(response.address.postcode);
+              if (response.address.country) locations.push(response.address.country);
+              $("#position-location").text(locations.join(', '));
+              $("#nominatim-license").text('Reverse Location ' + response.licence);
+            });
+          <?php endif; ?>
+
             loadOverviewData(<?php echo $station->id ?>);
+            quikLink();
         });
     </script>
 <?php endif; ?>

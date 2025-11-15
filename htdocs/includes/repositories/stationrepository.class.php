@@ -61,7 +61,7 @@ class StationRepository extends ModelRepository
         static $cache = array();
         $key = $name;
         if (!isset($cache[$key])) {
-            $cache[$key] = $this->getObjectFromSql('select * from station where name = ? order by latest_location_packet_timestamp desc limit 1', [$name]);
+            $cache[$key] = $this->getObjectFromSql('select * from station where name = ? order by latest_location_packet_timestamp desc nulls last limit 1', [$name]);
         }
         return $cache[$key];
     }
@@ -206,9 +206,9 @@ class StationRepository extends ModelRepository
 
         $pdo = PDOConnection::getInstance();
         $stmt = $pdo->prepare('
-	    select s.*
+        select s.*
             from station s
-	        left outer join ogn_device d on d.device_id = s.latest_ogn_sender_address
+            left outer join ogn_device d on d.device_id = s.latest_ogn_sender_address
             where s.latest_confirmed_packet_timestamp is not null
                 and s.latest_confirmed_packet_timestamp > ?
                 and (s.source_id != 5 or s.latest_confirmed_packet_timestamp > ?)
@@ -218,9 +218,9 @@ class StationRepository extends ModelRepository
         );
         $stmt->bindValue(1, (time() - $activeDuringLatestNumberOfSeconds));
         $stmt->bindValue(2, (time() - (60*60*24))); // OGN data should be deleted after 24h, but just to be safe we avoid including older data when searching
-	$stmt->bindValue(3, "$q%");
-	$stmt->bindValue(4, "$q%");
-	$stmt->bindValue(5, "$q%");
+    $stmt->bindValue(3, "$q%");
+    $stmt->bindValue(4, "$q%");
+    $stmt->bindValue(5, "$q%");
         $stmt->bindValue(6, $limit);
         $stmt->bindValue(7, $offset);
 
@@ -342,8 +342,9 @@ class StationRepository extends ModelRepository
         if ($pos) {
             $call = substr($name, 0, $pos);
         } else {
-            // No object found, return empty array
-            return [];
+            // Primary stations are supposed to use the -0 suffix.
+            // Some APRS software will drop the -0 and transmit just the callsign.
+            $call = $name;
         }
 
         if ($station->latestPacketTimestamp !== null) {
