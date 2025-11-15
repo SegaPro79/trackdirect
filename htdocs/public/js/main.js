@@ -418,16 +418,22 @@ jQuery(document).ready(function ($) {
 // Switch between regular topnav and topnav adapted for mobile
 function toggleTopNav() {
   var x = document.getElementById("tdTopnav");
-  if (x.className === "topnav") {
-    x.className += " responsive";
+  if (!x) {
+    return;
+  }
+
+  if (x.classList.contains("responsive")) {
+    x.classList.remove("responsive");
   } else {
-    x.className = "topnav";
+    x.classList.add("responsive");
   }
 }
 
 // If an external website shows map in iframe, hide all menu's
-if (!inIframe()) {
+if (inIframe()) {
   $("#tdTopnav").hide();
+} else {
+  $("#tdTopnav").show();
 }
 
 // Set correct time length option to active
