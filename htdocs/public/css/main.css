@@ -545,6 +545,44 @@ input[type=submit]:hover {
   font-weight: normal;
 }
 
+.overview-stations-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.overview-stations-table th,
+.overview-stations-table td {
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.overview-stations-table th {
+  font-weight: bold;
+  font-family: "Helvetica";
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.overview-stations-table td .nts {
+  display: block;
+  color: grey;
+  font-size: 11px;
+}
+
+.overview-stations-icon {
+  width: 32px;
+}
+
+.overview-stations-name {
+  white-space: nowrap;
+}
+
+.overview-stations-text {
+  word-break: break-word;
+}
+
 .overview-content-summary-hr, .overview-content-summary-hr-indent{
   font-weight: bold;
   font-family: "Helvetica";

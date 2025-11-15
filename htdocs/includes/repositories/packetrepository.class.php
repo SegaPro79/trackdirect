@@ -188,6 +188,45 @@ class PacketRepository extends ModelRepository
     }
 
     /**
+     * Get latest packet with a non-empty comment for a station
+     *
+     * @param  int $stationId
+     * @return Packet
+     */
+    public function getLatestPacketWithCommentByStationId($stationId)
+    {
+        if (!isInt($stationId)) {
+            return new Packet(0);
+        }
+
+        $sql = 'select * from packet where station_id = ? '
+            . 'and comment is not null and length(trim(comment)) > 0 '
+            . 'order by timestamp desc, id desc limit 1';
+
+        return $this->getObjectFromSql($sql, [$stationId]);
+    }
+
+    /**
+     * Get latest status packet for a station
+     *
+     * @param  int $stationId
+     * @return Packet
+     */
+    public function getLatestStatusPacketByStationId($stationId)
+    {
+        if (!isInt($stationId)) {
+            return new Packet(0);
+        }
+
+        $sql = 'select * from packet where station_id = ? '
+            . 'and packet_type_id = 10 '
+            . 'and comment is not null and length(trim(comment)) > 0 '
+            . 'order by timestamp desc, id desc limit 1';
+
+        return $this->getObjectFromSql($sql, [$stationId]);
+    }
+
+    /**
      * Get object list with raw by sender station id for the latest 24 hours
      *
      * @param  int $stationId

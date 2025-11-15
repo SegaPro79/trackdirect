@@ -526,39 +526,78 @@
                 <div class="overview-content-divider"></div>
             <?php endif; ?>
 
+            <?php $stationRepository = StationRepository::getInstance(); ?>
             <?php if (count($stationsHeardBy) > 0) : ?>
                 <div>
                     <div class="overview-content-summary-hr">Stations that heard <?php echo htmlspecialchars($station->name); ?> (latest <?php echo $communicationDays; ?> day(s)):</div>
                     <div class="overview-content-station-list" title="Stations that recently heard <?php echo htmlspecialchars($station->name); ?>" style="width:100%">
-                        <span>
-                            <span style="display:inline-block;width:1.8em">&nbsp;</span>
-                            <span style="display:inline-block;width:14em"><b>Station</b></span>
-                            <span class="nts" style="display:inline-block;width:10.4em"><b>Last heard</b></span>
-                            <span style="display:inline-block;width:7em"><b>Packets</b></span>
-                            <span style="display:inline-block;width:10em"><b>Longest distance</b></span>
-                        </span>
-                        <br/>
-                        <?php foreach ($stationsHeardBy as $stats) : ?>
-                            <?php $otherStation = StationRepository::getInstance()->getObjectById($stats['station_id']); ?>
-                            <?php
-                                $distanceLabel = '&nbsp;';
-                                if ($stats['longest_distance'] !== null) {
-                                    if (isImperialUnitUser()) {
-                                        $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
-                                    } else {
-                                        $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
-                                    }
-                                }
-                            ?>
-                            <span style="display:inline-block;width:1.8em;"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></span>
-                            <span style="display:inline-block;width:14em;">
-                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
-                            </span>
-                            <span class="nts" style="display:inline-block;width:10.4em;"><?php echo $stats['latest_timestamp']; ?></span>
-                            <span style="display:inline-block;width:7em;"><?php echo $stats['number_of_packets']; ?></span>
-                            <span style="display:inline-block;width:10em;"><?php echo $distanceLabel; ?></span>
-                            <br/>
-                        <?php endforeach; ?>
+                        <table class="overview-stations-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Station</th>
+                                    <th scope="col">Last heard</th>
+                                    <th scope="col">Last position</th>
+                                    <th scope="col">Comment</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Packet count</th>
+                                    <th scope="col">Longest distance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($stationsHeardBy as $stats) : ?>
+                                    <?php $otherStation = $stationRepository->getObjectById($stats['station_id']); ?>
+                                    <?php if ($otherStation->isExistingObject()) : ?>
+                                        <?php
+                                            $distanceLabel = '&nbsp;';
+                                            if ($stats['longest_distance'] !== null) {
+                                                if (isImperialUnitUser()) {
+                                                    $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
+                                                } else {
+                                                    $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
+                                                }
+                                            }
+                                            $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                            $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            $commentPacket = $otherStation->getLatestPacketWithComment();
+                                            $statusPacket = $otherStation->getLatestStatusPacket();
+                                        ?>
+                                        <tr>
+                                            <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
+                                            <td class="overview-stations-name">
+                                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
+                                            </td>
+                                            <td><span class="nts"><?php echo $stats['latest_timestamp']; ?></span></td>
+                                            <td>
+                                                <?php if ($positionLatitude !== null && $positionLongitude !== null) : ?>
+                                                    <?php echo round($positionLatitude, 5); ?>, <?php echo round($positionLongitude, 5); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($commentPacket->isExistingObject()) : ?>
+                                                    <span class="nts"><?php echo $commentPacket->timestamp; ?></span>
+                                                    <?php echo nl2br(htmlentities($commentPacket->comment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($statusPacket->isExistingObject()) : ?>
+                                                    <span class="nts"><?php echo $statusPacket->timestamp; ?></span>
+                                                    <?php echo nl2br(htmlentities($statusPacket->comment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo $stats['number_of_packets']; ?></td>
+                                            <td><?php echo $distanceLabel; ?></td>
+                                        </tr>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 <div class="overview-content-divider"></div>
@@ -568,39 +607,78 @@
                 <div>
                     <div class="overview-content-summary-hr">Stations heard by <?php echo htmlspecialchars($station->name); ?> (latest <?php echo $communicationDays; ?> day(s)):</div>
                     <div class="overview-content-station-list" title="Stations that <?php echo htmlspecialchars($station->name); ?> recently heard" style="width:100%">
-                        <span>
-                            <span style="display:inline-block;width:1.8em">&nbsp;</span>
-                            <span style="display:inline-block;width:14em"><b>Station</b></span>
-                            <span class="nts" style="display:inline-block;width:10.4em"><b>Last heard</b></span>
-                            <span style="display-inline-block;width:7em"><b>Packets</b></span>
-                            <span style="display-inline-block;width:10em"><b>Longest distance</b></span>
-                        </span>
-                        <br/>
-                        <?php foreach ($stationsHeard as $stats) : ?>
-                            <?php $otherStation = StationRepository::getInstance()->getObjectById($stats['station_id']); ?>
-                            <?php
-                                $distanceLabel = '&nbsp;';
-                                if ($stats['longest_distance'] !== null) {
-                                    if (isImperialUnitUser()) {
-                                        $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
-                                    } else {
-                                        $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
-                                    }
-                                }
-                            ?>
-                            <span style="display-inline-block;width:1.8em;"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></span>
-                            <span style="display-inline-block;width:14em;">
-                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
-                            </span>
-                            <span class="nts" style="display-inline-block;width:10.4em;"><?php echo $stats['latest_timestamp']; ?></span>
-                            <span style="display-inline-block;width:7em;"><?php echo $stats['number_of_packets']; ?></span>
-                            <span style="display-inline-block;width:10em;"><?php echo $distanceLabel; ?></span>
-                            <br/>
-                        <?php endforeach; ?>
+                        <table class="overview-stations-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Station</th>
+                                    <th scope="col">Last heard</th>
+                                    <th scope="col">Last position</th>
+                                    <th scope="col">Comment</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Packet count</th>
+                                    <th scope="col">Longest distance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($stationsHeard as $stats) : ?>
+                                    <?php $otherStation = $stationRepository->getObjectById($stats['station_id']); ?>
+                                    <?php if ($otherStation->isExistingObject()) : ?>
+                                        <?php
+                                            $distanceLabel = '&nbsp;';
+                                            if ($stats['longest_distance'] !== null) {
+                                                if (isImperialUnitUser()) {
+                                                    $distanceLabel = round(convertKilometerToMile($stats['longest_distance'] / 1000), 2) . ' miles';
+                                                } else {
+                                                    $distanceLabel = round($stats['longest_distance'] / 1000, 2) . ' km';
+                                                }
+                                            }
+                                            $positionLatitude = $otherStation->latestConfirmedLatitude ?? $otherStation->latestLocationLatitude;
+                                            $positionLongitude = $otherStation->latestConfirmedLongitude ?? $otherStation->latestLocationLongitude;
+                                            $commentPacket = $otherStation->getLatestPacketWithComment();
+                                            $statusPacket = $otherStation->getLatestStatusPacket();
+                                        ?>
+                                        <tr>
+                                            <td class="overview-stations-icon"><img src="<?php echo $otherStation->getIconFilePath(22, 22); ?>" alt="Symbol"/></td>
+                                            <td class="overview-stations-name">
+                                                <a class="tdlink" href="/views/overview.php?id=<?php echo $otherStation->id; ?>&imperialUnits=<?php echo $_GET['imperialUnits'] ?? 0; ?>"><?php echo htmlentities($otherStation->name); ?></a>
+                                            </td>
+                                            <td><span class="nts"><?php echo $stats['latest_timestamp']; ?></span></td>
+                                            <td>
+                                                <?php if ($positionLatitude !== null && $positionLongitude !== null) : ?>
+                                                    <?php echo round($positionLatitude, 5); ?>, <?php echo round($positionLongitude, 5); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($commentPacket->isExistingObject()) : ?>
+                                                    <span class="nts"><?php echo $commentPacket->timestamp; ?></span>
+                                                    <?php echo nl2br(htmlentities($commentPacket->comment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="overview-stations-text">
+                                                <?php if ($statusPacket->isExistingObject()) : ?>
+                                                    <span class="nts"><?php echo $statusPacket->timestamp; ?></span>
+                                                    <?php echo nl2br(htmlentities($statusPacket->comment)); ?>
+                                                <?php else : ?>
+                                                    &nbsp;
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo $stats['number_of_packets']; ?></td>
+                                            <td><?php echo $distanceLabel; ?></td>
+                                        </tr>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
                 <div class="overview-content-divider"></div>
             <?php endif; ?>
+
         </div>
 
         <?php if (count($relatedStations) > 1 || count($closeByStations) > 1 || count($stationsHeardBy) > 0 || count($stationsHeard) > 0) : ?>
